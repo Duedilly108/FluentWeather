@@ -1,6 +1,8 @@
 <h1> <img align="center" src="https://github.com/Gabboxl/FluentWeather/assets/26819478/cc001a70-bfa4-4e3e-84cf-ea86652dcb98" width=6% height=6%> FluentWeather <a title="Crowdin" target="_blank" href="https://crowdin.com/project/FluentWeather"><img src="https://badges.crowdin.net/FluentWeather/localized.svg"></a> </h1>  
 A beautiful & modern UWP weather app for Windows.
 
+This is a fork of FluentWeather by Gabboxl. It adds saved locations, tray icons, and resizing in a local build setup. duedilly made these changes on November 3, 2026. FEATURES.txt lists the added features. To install this version, follow LocalBuild/README.txt.
+
 ![dropshad2](https://github.com/Gabboxl/FluentWeather/assets/26819478/4170effe-4594-415b-b1ca-02c61087f539)
 
 ## Translate the app

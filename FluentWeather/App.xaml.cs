@@ -115,6 +115,13 @@ namespace FluentWeather
 
         protected override async void OnBackgroundActivated(BackgroundActivatedEventArgs args)
         {
+            // Local build: the tray helper's 5-minute refresh. It runs without a window.
+            if (TrayRefreshService.CanHandle(args.TaskInstance))
+            {
+                TrayRefreshService.Handle(args.TaskInstance);
+                return;
+            }
+
             await ActivationService.ActivateAsync(args);
         }
     }
