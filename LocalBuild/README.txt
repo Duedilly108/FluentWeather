@@ -292,6 +292,11 @@ Hover over either icon         a panel with the city and the details you choose.
                                nearest station. Moonrise, moonset and nearest
                                station are off by default.
                                "Show all" and "Reset to defaults" are at the bottom.
+                               To move the hover panel, drag it with the left mouse
+                               button. It then opens at that place. "Hover panel
+                               next to the icons" in the right-click menu puts it
+                               back. After the pointer leaves the icons, the panel
+                               stays 1.2 seconds, so you can reach it to drag it.
 
 The number shows "--" when there is no data yet, or when the data is older than
 3 hours. Open the app once to refresh it. If it stays at "--", check that

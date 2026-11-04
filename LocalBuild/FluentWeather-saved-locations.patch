@@ -1002,10 +1002,10 @@ index 80cba1cbfc056ad6fd9df6755b13dbcf47c8dbd4..278a3d3552d3db5abf3d2b03f6cc4606
                                  Background="{ThemeResource AutoSuggestBoxSuggestionsListBackground}"
                                  BorderBrush="{ThemeResource AutoSuggestBoxSuggestionsListBorderBrush}"
 diff --git a/FluentWeather/Utils/ApiUtils.cs b/FluentWeather/Utils/ApiUtils.cs
-index 9c07a12037569243fc915fcf6b3fda7befeed576..364880650310d637ee12f2c6c87a89636bd8e77e 100644
+index 9c07a12037569243fc915fcf6b3fda7befeed576..6512fabcb4eb07c251fa8b6f070390e31e5ef2d0 100644
 --- a/FluentWeather/Utils/ApiUtils.cs
 +++ b/FluentWeather/Utils/ApiUtils.cs
-@@ -1,12 +1,17 @@
+@@ -1,24 +1,62 @@
  ﻿using System;
 +using System.Globalization;
  using System.Net.Http;
@@ -1022,9 +1022,58 @@ index 9c07a12037569243fc915fcf6b3fda7befeed576..364880650310d637ee12f2c6c87a8963
 +            ? Windows.Globalization.ApplicationLanguages.PrimaryLanguageOverride
 +            : Windows.System.UserProfile.GlobalizationPreferences.Languages[0];
  
-         private static readonly HttpClient SharedClient = new()
+-        private static readonly HttpClient SharedClient = new()
++        private static readonly HttpClient SharedClient = CreateClient("https://api.weather.com/v2/");
++
++        /// <summary>
++        /// An HttpClient that does not keep idle connections for long. While the app is suspended
++        /// (window minimized or PC asleep), the network can close an idle connection without the app
++        /// noticing. The next request on it then fails with "An existing connection was forcibly
++        /// closed by the remote host". Idle connections are closed after 15 seconds, and every
++        /// connection is replaced after 2 minutes.
++        /// </summary>
++        internal static HttpClient CreateClient(string baseAddress)
++        {
++            var handler = new SocketsHttpHandler
++            {
++                PooledConnectionIdleTimeout = TimeSpan.FromSeconds(15),
++                PooledConnectionLifetime = TimeSpan.FromMinutes(2),
++            };
++            return new HttpClient(handler) { BaseAddress = new Uri(baseAddress) };
++        }
++
++        /// <summary>
++        /// Sends a GET request. When the connection fails before the server answers, the request is
++        /// sent once more after 0.2 seconds. The failed connection is dropped, so the second try
++        /// uses a new one. This covers the first request after the app wakes up.
++        /// An answer with an error status (for example 404) is returned and not repeated.
++        /// </summary>
++        internal static async Task<HttpResponseMessage> GetWithRetryAsync(HttpClient client, string url)
          {
-@@ -30,5 +35,76 @@ namespace FluentWeather.Utils
+-            BaseAddress = new Uri("https://api.weather.com/v2/")
+-        };
++            try
++            {
++                return await client.GetAsync(url);
++            }
++            catch (HttpRequestException e) when (e.StatusCode == null)
++            {
++                await Task.Delay(200);
++                return await client.GetAsync(url);
++            }
++        }
+ 
+         public static async Task<HttpResponseMessage> GetFullData(string placeId)
+         {
+             if (string.IsNullOrEmpty(placeId))
+                 throw new ArgumentNullException(nameof(placeId));
+ 
+-            var response = await SharedClient.GetAsync(
++            var response = await GetWithRetryAsync(SharedClient,
+                 "aggcommon/v3alertsHeadlines;v3-wx-observations-current;v3-wx-forecast-hourly-10day;v3-wx-forecast-daily-10day;v3-wx-forecast-daily-15day;v3-location-point;v2idxDrySkinDaypart10;v2idxWateringDaypart10;v2idxPollenDaypart10;v2idxRunDaypart10;v2idxDriveDaypart10?format=json&placeid="
+                 + placeId
+                 + "&units=" + await VariousUtils.GetUnitsCode()
+@@ -30,5 +68,76 @@ namespace FluentWeather.Utils
  
              return response;
          }
@@ -1042,7 +1091,7 @@ index 9c07a12037569243fc915fcf6b3fda7befeed576..364880650310d637ee12f2c6c87a8963
 +                      + longitude.ToString("0.###", CultureInfo.InvariantCulture)
 +                      + "&product=observation&format=json&apiKey=793db2b6128c4bc2bdb2b6128c0bc230";
 +
-+            using var response = await SharedClient.GetAsync(url);
++            using var response = await GetWithRetryAsync(SharedClient, url);
 +            if (!response.IsSuccessStatusCode)
 +                return null;
 +
@@ -1088,11 +1137,11 @@ index 9c07a12037569243fc915fcf6b3fda7befeed576..364880650310d637ee12f2c6c87a8963
 +                        + "&units=" + await VariousUtils.GetUnitsCode()
 +                        + "&language=" + SystemLanguage + "&apiKey=793db2b6128c4bc2bdb2b6128c0bc230";
 +
-+            var response = await SharedClient.GetAsync("aggcommon/v3-wx-observations-current;v3-location-point;v3-wx-forecast-daily-3day" + query);
++            var response = await GetWithRetryAsync(SharedClient, "aggcommon/v3-wx-observations-current;v3-location-point;v3-wx-forecast-daily-3day" + query);
 +            if (!response.IsSuccessStatusCode)
 +            {
 +                response.Dispose();
-+                response = await SharedClient.GetAsync("aggcommon/v3-wx-observations-current;v3-location-point" + query);
++                response = await GetWithRetryAsync(SharedClient, "aggcommon/v3-wx-observations-current;v3-location-point" + query);
 +            }
 +
 +            response.EnsureSuccessStatusCode();
@@ -1515,7 +1564,7 @@ index d66a0cd0fc178ba9524a19c8396ed7fa86c74d81..fe8cfa07cb362855293e25eedf085193
      </Grid>
  
 diff --git a/FluentWeather/Views/MainPage.xaml.cs b/FluentWeather/Views/MainPage.xaml.cs
-index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea8082ca2c64 100644
+index 176da895fa3caa0661528a6db4ef261ba48f5b96..08bf3845dce652ae0ba7bca6c9a3bc9778278366 100644
 --- a/FluentWeather/Views/MainPage.xaml.cs
 +++ b/FluentWeather/Views/MainPage.xaml.cs
 @@ -8,9 +8,11 @@ using FluentWeather.Services;
@@ -1542,9 +1591,15 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
  using Windows.UI.Xaml.Input;
  using Windows.UI.Xaml.Media.Animation;
  using Windows.UI.Xaml.Media.Imaging;
-@@ -47,7 +51,10 @@ namespace FluentWeather.Views
-             BaseAddress = new Uri("https://api.weather.com/"),
-         };
+@@ -42,12 +46,12 @@ namespace FluentWeather.Views
+ 
+         private readonly AppViewModel _appViewModel = AppViewModelHolder.GetViewModel();
+ 
+-        private static readonly HttpClient SharedClient = new()
+-        {
+-            BaseAddress = new Uri("https://api.weather.com/"),
+-        };
++        private static readonly HttpClient SharedClient = ApiUtils.CreateClient("https://api.weather.com/");
  
 -        private static readonly string SystemLanguage = Windows.System.UserProfile.GlobalizationPreferences.Languages[0];
 +        // Local build: the language chosen in the app settings, otherwise the Windows display language.
@@ -1554,7 +1609,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
  
          private RootV3Response? _lastApiData;
  
-@@ -55,6 +62,27 @@ namespace FluentWeather.Views
+@@ -55,6 +59,27 @@ namespace FluentWeather.Views
  
          private readonly DispatcherTimer _refreshTimer = new();
  
@@ -1582,7 +1637,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
          public int SettingsUnitsSelectedIndex
          {
              get
-@@ -72,6 +100,31 @@ namespace FluentWeather.Views
+@@ -72,6 +97,31 @@ namespace FluentWeather.Views
              }
          }
  
@@ -1614,7 +1669,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
          public bool BackgroundImageToggleStatus
          {
              get
-@@ -164,6 +217,23 @@ namespace FluentWeather.Views
+@@ -164,6 +214,23 @@ namespace FluentWeather.Views
                  }
              };
  
@@ -1638,7 +1693,16 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
          }
  
          private async void RefreshTimerTickEvent(object? sender, object e)
-@@ -224,12 +294,15 @@ namespace FluentWeather.Views
+@@ -192,7 +259,7 @@ namespace FluentWeather.Views
+             {
+                 try
+                 {
+-                    var response = await SharedClient.GetAsync("v3/location/searchflat?query=" + sender.Text +
++                    var response = await ApiUtils.GetWithRetryAsync(SharedClient, "v3/location/searchflat?query=" + sender.Text +
+                                                                "&language=" +
+                                                                SystemLanguage +
+                                                                "&apiKey=793db2b6128c4bc2bdb2b6128c0bc230&format=json");
+@@ -224,12 +291,15 @@ namespace FluentWeather.Views
              AutoSuggestBoxSuggestionChosenEventArgs args)
          {
              var selectedPlaceId = ((SearchedLocation) args.SelectedItem).placeId;
@@ -1656,7 +1720,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
              await CoreApplication.MainView.Dispatcher.RunAsync(
                  CoreDispatcherPriority.Normal, () =>
                  {
-@@ -247,22 +320,38 @@ namespace FluentWeather.Views
+@@ -247,22 +317,38 @@ namespace FluentWeather.Views
  
                  var response = await ApiUtils.GetFullData(lastPlaceId);
                  var jsonResponse = await response.Content.ReadAsStringAsync();
@@ -1697,7 +1761,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
                  if (e is HttpRequestException or TaskCanceledException)
                  {
                      await CoreApplication.MainView.Dispatcher.RunAsync(
-@@ -294,13 +383,17 @@ namespace FluentWeather.Views
+@@ -294,13 +380,17 @@ namespace FluentWeather.Views
              }
              finally
              {
@@ -1722,7 +1786,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
              }
          }
  
-@@ -382,7 +475,7 @@ namespace FluentWeather.Views
+@@ -382,7 +472,7 @@ namespace FluentWeather.Views
              return storyboard;
          }
  
@@ -1731,7 +1795,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
          {
              CrossfadeToImageApiData(rootV3Response);
  
-@@ -396,7 +489,10 @@ namespace FluentWeather.Views
+@@ -396,7 +486,10 @@ namespace FluentWeather.Views
              //update chips
              WetUnits currentUnits = await VariousUtils.GetUnitsCode();
  
@@ -1743,7 +1807,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
  
              //join the variables displayName, city, adminDistrict, country together in a single string with a comma between each variable (some may be empty) and remove duplicate names
              string placeName = string.Join(", ",
-@@ -410,6 +506,15 @@ namespace FluentWeather.Views
+@@ -410,6 +503,15 @@ namespace FluentWeather.Views
  
              PlaceText.Text = placeName;
  
@@ -1759,7 +1823,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
              MainPhraseText.Text = rootV3Response.v3wxobservationscurrent.cloudCoverPhrase;
  
              CurrentTempText.Text = rootV3Response.v3wxobservationscurrent.temperature + "°" +
-@@ -475,6 +580,8 @@ namespace FluentWeather.Views
+@@ -475,6 +577,8 @@ namespace FluentWeather.Views
          {
              if (_lastApiData == null) return;
  
@@ -1768,7 +1832,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
              List<HourDataAdapter> hourlyDataAdapters = [];
  
              WetUnits currentUnits = await VariousUtils.GetUnitsCode();
-@@ -486,6 +593,24 @@ namespace FluentWeather.Views
+@@ -486,6 +590,24 @@ namespace FluentWeather.Views
              //subtract daytoload to firstdate to get the index of the first day to load
              int daysDiff = dayToLoad.Date.Subtract(firstDate.Date).Days;
  
@@ -1793,7 +1857,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
              if (daysDiff == -1 ||
                  (daysDiff == 0 &&
                   _lastApiData.v3wxforecasthourly10day.validTimeLocal[0].Hour > 7)) //this means that we are still in a tonight/today state and we add hours only until 7AM
-@@ -713,18 +838,19 @@ namespace FluentWeather.Views
+@@ -713,18 +835,19 @@ namespace FluentWeather.Views
                  CrossfadeToImageApiData();
              else
                  CrossfadeToImage(null);
@@ -1822,7 +1886,7 @@ index 176da895fa3caa0661528a6db4ef261ba48f5b96..50d5f03174dbceaf76739ca706ccea80
          }
  
          private async void UpdateRefreshTimerSettings(int minutes = -1)
-@@ -742,5 +868,822 @@ namespace FluentWeather.Views
+@@ -742,5 +865,822 @@ namespace FluentWeather.Views
  
              await ApplicationData.Current.LocalSettings.SaveAsync("autoRefreshDataMinutes", minutes);
          }

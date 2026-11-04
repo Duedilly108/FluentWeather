@@ -57,8 +57,8 @@ using Windows.Foundation.Collections;
 [assembly: System.Reflection.AssemblyDescription("Shows the FluentWeather temperature and weather icon in the notification area.")]
 [assembly: System.Reflection.AssemblyProduct("FluentWeather Local")]
 [assembly: System.Reflection.AssemblyCompany("Built on this PC by FluentWeatherLocal Setup")]
-[assembly: System.Reflection.AssemblyVersion("1.17.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.17.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.18.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.18.1.0")]
 
 namespace FluentWeatherLocal
 {
@@ -893,6 +893,20 @@ namespace FluentWeatherLocal
         private Bitmap _art;
         private bool _light;
 
+        // Dragging: hold the left mouse button on the panel and move it. After the drop the panel
+        // opens at that place, until "Hover panel next to the icons" in the tray menu is chosen.
+        private bool _dragging;
+        private Point _dragStartCursor;
+        private Point _dragStartLocation;
+
+        /// <summary>The saved top-left corner in screen pixels, or null for "next to the icons".</summary>
+        public Point? CustomLocation;
+
+        /// <summary>Raised after a drag ends, with the new top-left corner.</summary>
+        public event Action<Point> Moved;
+
+        public bool IsDragging { get { return _dragging; } }
+
         public HoverPanel()
         {
             FormBorderStyle = FormBorderStyle.None;
@@ -901,6 +915,66 @@ namespace FluentWeatherLocal
             TopMost = true;
             DoubleBuffered = true;
             AutoScaleMode = AutoScaleMode.None;
+            Cursor = Cursors.SizeAll;   // shows that the panel can be dragged
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button != MouseButtons.Left)
+                return;
+            _dragging = true;
+            _dragStartCursor = Cursor.Position;
+            _dragStartLocation = Location;
+            Capture = true;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            if (!_dragging)
+                return;
+            var p = Cursor.Position;
+            Location = new Point(_dragStartLocation.X + p.X - _dragStartCursor.X, _dragStartLocation.Y + p.Y - _dragStartCursor.Y);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (!_dragging || e.Button != MouseButtons.Left)
+                return;
+            _dragging = false;
+            Capture = false;
+            // A click without a real move does not save a place.
+            var p = Cursor.Position;
+            var drag = SystemInformation.DragSize;
+            if (Math.Abs(p.X - _dragStartCursor.X) < drag.Width && Math.Abs(p.Y - _dragStartCursor.Y) < drag.Height)
+            {
+                Location = _dragStartLocation;
+                return;
+            }
+            Location = KeepOnScreen(Location);
+            CustomLocation = Location;
+            var handler = Moved;
+            if (handler != null)
+                handler(Location);
+        }
+
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            base.OnMouseCaptureChanged(e);
+            _dragging = false;   // for example when another window takes the mouse
+        }
+
+        // Moves the panel fully into the working area of the screen it is mostly on. This also
+        // brings back a saved place after a monitor was removed or the resolution changed.
+        private Point KeepOnScreen(Point topLeft)
+        {
+            var center = new Point(topLeft.X + Width / 2, topLeft.Y + Height / 2);
+            var area = Screen.FromPoint(center).WorkingArea;
+            var x = Math.Max(area.Left, Math.Min(topLeft.X, area.Right - Width));
+            var y = Math.Max(area.Top, Math.Min(topLeft.Y, area.Bottom - Height));
+            return new Point(x, y);
         }
 
         protected override bool ShowWithoutActivation
@@ -1090,6 +1164,13 @@ namespace FluentWeatherLocal
         // Places the panel next to the notification area, on whichever side the taskbar is.
         public void ShowNear(Point cursor)
         {
+            if (CustomLocation.HasValue)
+            {
+                Location = KeepOnScreen(CustomLocation.Value);
+                if (!Visible) Show();
+                return;
+            }
+
             var area = Screen.FromPoint(cursor).WorkingArea;
             var gap = Scale(8);
             int x = cursor.X - Width / 2;
@@ -1138,6 +1219,9 @@ namespace FluentWeatherLocal
         private readonly System.Windows.Forms.Timer _hoverShow = new System.Windows.Forms.Timer();
         private readonly System.Windows.Forms.Timer _hoverWatch = new System.Windows.Forms.Timer();
         private Point _hoverPoint;
+        private DateTime _hoverLeftUtc = DateTime.MinValue;   // when the pointer left the icons and the panel
+        private static readonly TimeSpan HoverGrace = TimeSpan.FromMilliseconds(1200);
+        private Point? _hoverLocation;                        // saved panel place, null = next to the icons
         private DateTime _keepMenuOpenUntil = DateTime.MinValue;
         private string _trayCity = AppCity;   // "app" = same city as the app, otherwise a saved placeId
         private const string AppCity = "app";
@@ -1370,11 +1454,32 @@ namespace FluentWeatherLocal
             _hoverWatch.Interval = 150;
             _hoverWatch.Tick += delegate
             {
-                // Hide once the pointer leaves the icons.
+                // The panel stays open while the pointer is on the icons or on the panel, and while
+                // it is dragged. After the pointer leaves both, it stays 1.2 seconds more, so the
+                // pointer can move from the icons to a panel at a saved place to drag it again.
+                if (_menu.Visible)
+                {
+                    HideHover();
+                    return;
+                }
                 var p = Cursor.Position;
                 var limit = NativeMethods.GetSmallIconSize() * 2;
-                if (Math.Abs(p.X - _hoverPoint.X) > limit || Math.Abs(p.Y - _hoverPoint.Y) > limit || _menu.Visible)
+                var onIcons = Math.Abs(p.X - _hoverPoint.X) <= limit && Math.Abs(p.Y - _hoverPoint.Y) <= limit;
+                if (onIcons || _hover.IsDragging || _hover.Bounds.Contains(p))
+                {
+                    _hoverLeftUtc = DateTime.MinValue;
+                    return;
+                }
+                if (_hoverLeftUtc == DateTime.MinValue)
+                    _hoverLeftUtc = DateTime.UtcNow;
+                else if (DateTime.UtcNow - _hoverLeftUtc > HoverGrace)
                     HideHover();
+            };
+            _hover.CustomLocation = _hoverLocation;
+            _hover.Moved += delegate (Point location)
+            {
+                _hoverLocation = location;
+                SaveSettings();
             };
             _menu.Opening += delegate { HideHover(); };
             // Keep the menu open while ticking hover details, so several can be changed at once.
@@ -1396,6 +1501,7 @@ namespace FluentWeatherLocal
         {
             _hoverShow.Stop();
             _hoverWatch.Stop();
+            _hoverLeftUtc = DateTime.MinValue;
             if (_hover.Visible) _hover.Hide();
         }
 
@@ -1807,6 +1913,16 @@ namespace FluentWeatherLocal
                         _trayCity = v;
                     else if (k.Equals("quickrefresh", StringComparison.OrdinalIgnoreCase))
                         _quickRefresh = !v.Equals("off", StringComparison.OrdinalIgnoreCase);
+                    else if (k.Equals("hoverpos", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // "hoverpos=x,y" in screen pixels, or "hoverpos=auto" for next to the icons.
+                        var parts = v.Split(',');
+                        int px, py;
+                        if (parts.Length == 2 &&
+                            int.TryParse(parts[0].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out px) &&
+                            int.TryParse(parts[1].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out py))
+                            _hoverLocation = new Point(px, py);
+                    }
                 }
                 // Version 2 added "Moon phase" to the defaults. Before, the moon line showed by itself at night.
                 if (hadDetails && version < 2 && !_hoverDetails.Contains("Moon"))
@@ -1828,7 +1944,10 @@ namespace FluentWeatherLocal
                     "city=" + _trayCity + "\r\n" +
                     "details=" + string.Join(",", _hoverDetails) + "\r\n" +
                     "detailsversion=" + DetailCatalog.Version.ToString(CultureInfo.InvariantCulture) + "\r\n" +
-                    "quickrefresh=" + (_quickRefresh ? "on" : "off") + "\r\n");
+                    "quickrefresh=" + (_quickRefresh ? "on" : "off") + "\r\n" +
+                    "hoverpos=" + (_hoverLocation.HasValue
+                        ? _hoverLocation.Value.X.ToString(CultureInfo.InvariantCulture) + "," + _hoverLocation.Value.Y.ToString(CultureInfo.InvariantCulture)
+                        : "auto") + "\r\n");
             }
             catch (Exception)
             {
@@ -1923,6 +2042,17 @@ namespace FluentWeatherLocal
                     e.Cancel = true;
             };
             _menu.Items.Add(details);
+
+            var nextToIcons = new ToolStripMenuItem("Hover panel next to the icons");
+            nextToIcons.Checked = !_hoverLocation.HasValue;
+            nextToIcons.ToolTipText = "Drag the hover panel to move it. It then opens at that place until you choose this item.";
+            nextToIcons.Click += delegate
+            {
+                _hoverLocation = null;
+                _hover.CustomLocation = null;
+                SaveSettings();
+            };
+            _menu.Items.Add(nextToIcons);
             _menu.Items.Add(new ToolStripSeparator());
 
             var locations = ReadSavedLocations();

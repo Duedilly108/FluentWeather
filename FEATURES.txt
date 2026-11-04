@@ -14,6 +14,7 @@ Ctrl+Tab and Ctrl+Shift+Tab switch to the next or previous saved location.
 Two saved locations with the same short name show their full names.
 Weather data for each location stays in memory for 10 minutes. Switching back to a recent location shows it at once without a network request.
 A slow response for an earlier location never replaces the location picked last.
+After the app wakes up, its first request can go over a connection that the network already closed. A request that fails before the server answers is sent once more on a new connection. Idle connections close after 15 seconds.
 A tip below the location buttons explains the star button. With no saved locations the tip is always shown. With saved locations a close button hides it for good.
 The setting "Text and picture size" under the gear button sets the size of the weather area from 50 to 100 percent in 5 percent steps, with a minus button, a plus button and a 100 percent button. The default is 100 percent.
 Ctrl+Minus makes the weather area 5 percent smaller. Ctrl+Plus makes it 5 percent larger. Ctrl+0 returns it to 100 percent.
@@ -70,6 +71,9 @@ Hovering over an icon shows a panel with the location name and the chosen detail
 The panel shows a large, detailed version of the weather picture with a soft glow behind it.
 The panel background runs from very dark blue at the top to dark blue at the bottom. It stretches with the number of details shown. The text is white with pale blue labels.
 The panel has rounded corners and a soft shadow.
+The hover panel can be dragged with the left mouse button. It then opens at that place. "Hover panel next to the icons" in the right-click menu puts it back.
+After the pointer leaves the icons and the panel, the panel stays 1.2 seconds more. This gives the pointer time to reach a panel at its saved place.
+A click on the panel without a move does not change its place. A saved place that is off the screen, for example after a monitor was removed, moves back onto the screen.
 The details to show are chosen in the right-click menu. The choices are conditions, temperature, feels like, 24 hour high and low, 24 hour change, dew point, heat index, wind chill, humidity, wind and gusts, UV index, pressure and trend, visibility, cloud ceiling, rain for 1, 6 and 24 hours, snow for 24 hours, sunrise, sunset, moon phase, moonrise, moonset and observation time. "Show all" and "Reset to defaults" are in the same menu.
 The hover detail "Moon phase" shows the phase name and the lit percentage, by day and by night. It is on by default.
 The hover details "Moonrise" and "Moonset" show the next moonrise and the next moonset. A time on a later day starts with the weekday, for example "Thu 2:58 AM". They are off by default.
