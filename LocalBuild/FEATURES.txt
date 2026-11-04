@@ -1,0 +1,136 @@
+FluentWeather Local is FluentWeather 2.1.0 by Gabboxl (github.com/Gabboxl/FluentWeather) with the features in this file. It keeps all features of the original app. Each PC builds and signs its own copy with the files in the LocalBuild folder. LocalBuild/README.txt has the setup steps.
+
+
+The app window has these features.
+
+A star button next to the location name saves the location that is shown.
+Clicking the star again removes the location.
+Up to 25 locations can be saved.
+Saved locations appear as buttons below the location name.
+Clicking a location button switches to that location.
+Right-clicking a location button opens a menu to move it left, move it right or remove it.
+Ctrl+1 to Ctrl+9 switch to saved locations 1 to 9.
+Ctrl+Tab and Ctrl+Shift+Tab switch to the next or previous saved location.
+Two saved locations with the same short name show their full names.
+Weather data for each location stays in memory for 10 minutes. Switching back to a recent location shows it at once without a network request.
+A slow response for an earlier location never replaces the location picked last.
+A tip below the location buttons explains the star button. With no saved locations the tip is always shown. With saved locations a close button hides it for good.
+The setting "Text and picture size" under the gear button sets the size of the weather area from 50 to 100 percent in 5 percent steps, with a minus button, a plus button and a 100 percent button. The default is 100 percent.
+Ctrl+Minus makes the weather area 5 percent smaller. Ctrl+Plus makes it 5 percent larger. Ctrl+0 returns it to 100 percent.
+The setting "Background contrast" makes the text easier to read on the weather background photo. Original shows the photo as it is. Dark and Darker shade the photo and keep light text. Light and Lighter brighten the photo and switch the page to dark text. Dark is the default.
+With Light or Lighter the cards, the titles and the window buttons also turn dark.
+The setting "Hourly forecast" shows the hours of the selected day, or 24, 36 or 48 hours. Day is the default.
+For today the 24, 36 and 48 hour lists start at the current hour. For another day they start at midnight of that day.
+In those lists the first hour and each midnight show the weekday.
+The setting "Language" sets the language of the app text and of the weather descriptions. "Windows default" uses the Windows display language. The Language button opens a window with a scrollable list of every language that comes with the app.
+After a language change the app offers to restart.
+The search box reads "Search a location...".
+The top bar fits narrow windows. The refresh button, the search box and the settings button never cover the app name or the window buttons. In a narrow window the app name is hidden.
+The saved locations tip wraps to the width of the window.
+The settings flyout under the gear button is drawn at 80 percent of its normal size.
+The "Auto refresh" setting uses option buttons for Off, 5, 10, 15 and 30 minutes and 1 hour.
+The list of locations below the search box stays at least 340 pixels wide in a narrow window. Long names wrap onto a second line.
+The "Updated on" line shows the date in the Windows date format and the time in the 12 or 24 hour setting of the app.
+The window opens at 820 by 600 pixels the first time. After that Windows remembers the size and position the user sets.
+The app accepts the link fluentweather-local:switch?placeId=<id> and opens at that location. It accepts saved locations only.
+
+
+The app writes weather data for the tray icons.
+
+The app writes the current conditions of the location it shows to a small file in its own data folder.
+It writes the current conditions of every saved location to a second file.
+The app background task refreshes both files about every 15 minutes, also with the app window closed.
+While the app window is closed or minimized, the tray program asks the app every 5 minutes to refresh both files. Windows runs the refresh inside the app without opening its window. The tray program itself still makes no internet connection.
+The 5-minute updates can be turned off in the tray menu.
+Saved locations refresh at most every 10 minutes, with up to 4 requests at the same time.
+Each saved location uses a small request of about 6 KB. It includes the 3-day forecast for the moonrise and moonset times. If that request fails, the app sends it again without the forecast.
+A failed request keeps the last data for that location.
+Each file write replaces the old file in one step, so a reader never sees half a file.
+
+
+The tray icons have these features.
+
+Two icons appear side by side in the notification area. The left icon shows the temperature as a number. The right icon shows the weather picture for the current conditions.
+The weather picture is one of 15. Sunny shows a full sun. Clear night shows the moon. Partly cloudy shows a sun partly behind a cloud. Partly cloudy night shows the moon partly behind a cloud. Cloudy shows a cloud. Cloudy night shows the lit edge of the moon behind a cloud. Fog shows horizontal bands. Light rain shows a cloud with 2 rain drops. Rain shows a cloud with 4 rain drops. Heavy rain shows a dark cloud with 7 rain drops. Ice or mixed shows a cloud with rain drops and snowflakes. Thunderstorm shows a lightning bolt with 7 rain drops. Severe storm shows a lightning bolt with a red warning triangle. Light snow shows 3 snowflakes. Heavy snow shows 7 snowflakes.
+The moon shows its phase for today. North of the equator a waxing moon is lit on the right and a waning moon on the left. South of the equator the sides are swapped.
+The moon is drawn in a light brown.
+weather.com sends the same cloudy code by day and by night. The app writes whether it is day or night, so the cloudy picture shows the moon at night.
+In the cloudy night picture the moon shows on its lit side. At 16 to 32 pixels more of the moon shows, so it stays visible.
+The tray program draws the pictures itself, so they stay sharp at every display scale.
+In the rain pictures the cloud fills the top 40 percent, so the drops are easy to count at 16 pixels.
+The picture follows the weather code and the condition text. When the text says light, heavy or thunder, the picture shows that strength. When the code shows only a cloud, sun or moon and the text names rain, snow, ice or thunder, the text decides. "Showers in the Vicinity" with a cloud code shows light rain. This works for English condition text. In other languages the weather code alone decides.
+The number can show the temperature or the feels-like temperature.
+The icons follow the light or dark taskbar theme.
+The number shows "--" when there is no data or the data is older than 3 hours.
+The icons update within a second of a change in the data files.
+Left-clicking an icon opens the app at the location the tray shows.
+Left-clicking an icon again while the app window is the active window closes the window, so only the tray icons stay. A window behind other windows comes to the front instead.
+The right-click menu picks the location the tray shows. It lists each saved location with its temperature, plus "Same city as the app". The app window stays closed.
+Hovering over an icon shows a panel with the location name and the chosen details.
+The panel shows a large, detailed version of the weather picture with a soft glow behind it.
+The panel background runs from very dark blue at the top to dark blue at the bottom. It stretches with the number of details shown. The text is white with pale blue labels.
+The panel has rounded corners and a soft shadow.
+The hover panel can be dragged with the left mouse button. It then opens at that place. "Hover panel next to the icons" in the right-click menu puts it back.
+After the pointer leaves the icons and the panel, the panel stays 1.2 seconds more. This gives the pointer time to reach a panel at its saved place.
+A click on the panel without a move does not change its place. A saved place that is off the screen, for example after a monitor was removed, moves back onto the screen.
+The details to show are chosen in the right-click menu. The choices are conditions, temperature, feels like, 24 hour high and low, 24 hour change, dew point, heat index, wind chill, humidity, wind and gusts, UV index, pressure and trend, visibility, cloud ceiling, rain for 1, 6 and 24 hours, snow for 24 hours, sunrise, sunset, moon phase, moonrise, moonset and observation time. "Show all" and "Reset to defaults" are in the same menu.
+The hover detail "Moon phase" shows the phase name and the lit percentage, by day and by night. It is on by default.
+The hover details "Moonrise" and "Moonset" show the next moonrise and the next moonset. A time on a later day starts with the weekday, for example "Thu 2:58 AM". They are off by default.
+The hover detail "Nearest station" shows the closest official weather station with its code and distance, for example "Fairfield (KFFL), 3.1 mi". It is off by default. The app looks it up once per location and keeps it for 30 days. weather.com blends many sources for the current conditions of the exact location, so the station is shown for reference.
+The right-click menu also has "Check for updates now", "Restart FluentWeather (app and tray icons)", "Close FluentWeather window", "Exit tray icons" and "Exit tray icons and close FluentWeather".
+"Close FluentWeather window" closes the window like its X button, so Windows remembers the window size and position. If the app still runs after 4 seconds, the tray program ends it.
+The tray icons start at sign-in. The app window does not open at sign-in unless Setup runs with -StartApp.
+The Start menu has "FluentWeather tray icons" and "Restart FluentWeather".
+The tray program never connects to the internet.
+Each PC compiles the tray program from FluentWeatherTray.cs with the C# compiler that ships with Windows.
+
+
+Setup has these features.
+
+Setup needs no Microsoft account, no Microsoft Store and no winget.
+Setup creates a code signing certificate for the PC. The private key stays in the user certificate store and cannot be exported. The certificate is valid for 5 years.
+Windows trusts packages signed with that certificate on that PC only.
+Setup installs Git for Windows and Visual Studio 2026 Build Tools if they are missing. It checks the digital signature of each installer before it runs it.
+Setup uses installers that the user downloaded with a web browser into the Downloads folder. This works when a firewall blocks PowerShell.
+Setup copies its files to C:\Program Files\FluentWeatherLocal, where only administrators can change them.
+Setup adds "FluentWeather local build" to Settings > Apps. Uninstalling it there removes the app, the tray icons, the update task, the certificate and all files. Setup.cmd -Uninstall does the same.
+Setup can remove a Microsoft Store copy of FluentWeather with -RemoveStoreVersion.
+
+
+Updates have these features.
+
+A scheduled task checks for a new release of FluentWeather 3 minutes after sign-in.
+The task goes online at most every 30 days. -CheckEveryDays sets 1 to 365 days.
+In Ask mode a window shows the new version, its date, the release notes of the developer and the list of changes since the installed version.
+The window has the buttons "Update now", "Not now" and "Skip this version".
+"Skip this version" stops the automatic check from asking about that release. A newer release asks again.
+An unanswered window closes after 60 minutes and counts as "Not now".
+Auto mode installs a new release without asking. Off mode removes the automatic check. -UpdateMode sets Ask, Auto or Off. Ask is the default.
+"Check for updates now" in the tray menu and "Update FluentWeather.cmd" check at any time.
+An update downloads the source of the release, applies the saved-locations patch, builds, checks the signature and installs.
+Saved locations and settings stay after an update.
+If a new release changes the same code as the patch, the update stops and the installed version stays.
+Each build gets its own version number, so Windows always accepts the new package.
+A notification reports the result of each update.
+The logs folder keeps the last 20 log files.
+
+
+The network relay has these features.
+
+During an update, git and MSBuild connect only to FluentWeatherNet.exe on 127.0.0.1.
+The relay connects only to the host names in allowed-hosts.txt, and only on port 443.
+The allowed hosts are github.com, api.github.com, api.nuget.org and globalcdn.nuget.org.
+The relay logs each allowed and each blocked connection.
+The relay runs only while an update runs and exits when the update ends.
+A firewall needs exceptions for two programs only, FluentWeatherNet.exe and the FluentWeather (Local) app. Git, MSBuild and PowerShell need no exception.
+Each PC compiles the relay from FluentWeatherNet.cs with the C# compiler that ships with Windows.
+
+
+The single-file installer has these features.
+
+"Make FluentWeather installer" in the Start menu builds FluentWeatherLocal-Installer.exe on the Desktop.
+Each PC compiles the installer from FluentWeatherInstaller.cs with the C# compiler that ships with Windows. The build makes no internet connection.
+The installer holds the setup files only. It holds no certificate, no settings, no saved locations and no logs.
+When it runs, it asks to install now, to extract the files to a Desktop folder first, or to cancel.
+An install extracts the files to a temporary folder, runs Setup, waits for it to finish and deletes the temporary folder.
+Each PC that runs the installer creates its own signing certificate.
