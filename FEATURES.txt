@@ -43,7 +43,7 @@ The app background task refreshes both files about every 15 minutes, also with t
 While the app window is closed or minimized, the tray program asks the app every 5 minutes to refresh both files. Windows runs the refresh inside the app without opening its window. The tray program itself still makes no internet connection.
 The 5-minute updates can be turned off in the tray menu.
 Saved locations refresh at most every 10 minutes, with up to 4 requests at the same time.
-Each saved location uses a small request of about 2 KB.
+Each saved location uses a small request of about 6 KB. It includes the 3-day forecast for the moonrise and moonset times. If that request fails, the app sends it again without the forecast.
 A failed request keeps the last data for that location.
 Each file write replaces the old file in one step, so a reader never sees half a file.
 
@@ -51,9 +51,11 @@ Each file write replaces the old file in one step, so a reader never sees half a
 The tray icons have these features.
 
 Two icons appear side by side in the notification area. The left icon shows the temperature as a number. The right icon shows the weather picture for the current conditions.
-The weather picture is one of 14. Sunny shows a full sun. Clear night shows the moon. Partly cloudy shows a sun partly behind a cloud. Partly cloudy night shows the moon partly behind a cloud. Cloudy shows a cloud. Fog shows horizontal bands. Light rain shows a cloud with 2 rain drops. Rain shows a cloud with 4 rain drops. Heavy rain shows a dark cloud with 7 rain drops. Ice or mixed shows a cloud with rain drops and snowflakes. Thunderstorm shows a lightning bolt with 7 rain drops. Severe storm shows a lightning bolt with a red warning triangle. Light snow shows 3 snowflakes. Heavy snow shows 7 snowflakes.
+The weather picture is one of 15. Sunny shows a full sun. Clear night shows the moon. Partly cloudy shows a sun partly behind a cloud. Partly cloudy night shows the moon partly behind a cloud. Cloudy shows a cloud. Cloudy night shows the lit edge of the moon behind a cloud. Fog shows horizontal bands. Light rain shows a cloud with 2 rain drops. Rain shows a cloud with 4 rain drops. Heavy rain shows a dark cloud with 7 rain drops. Ice or mixed shows a cloud with rain drops and snowflakes. Thunderstorm shows a lightning bolt with 7 rain drops. Severe storm shows a lightning bolt with a red warning triangle. Light snow shows 3 snowflakes. Heavy snow shows 7 snowflakes.
 The moon shows its phase for today. North of the equator a waxing moon is lit on the right and a waning moon on the left. South of the equator the sides are swapped.
-At night the hover panel adds a Moon line with the phase name and the lit percentage.
+The moon is drawn in a light brown.
+weather.com sends the same cloudy code by day and by night. The app writes whether it is day or night, so the cloudy picture shows the moon at night.
+In the cloudy night picture the moon shows on its lit side. At 16 to 32 pixels more of the moon shows, so it stays visible.
 The tray program draws the pictures itself, so they stay sharp at every display scale.
 In the rain pictures the cloud fills the top 40 percent, so the drops are easy to count at 16 pixels.
 The picture follows the weather code and the condition text. When the text says light, heavy or thunder, the picture shows that strength. When the code shows only a cloud, sun or moon and the text names rain, snow, ice or thunder, the text decides. "Showers in the Vicinity" with a cloud code shows light rain. This works for English condition text. In other languages the weather code alone decides.
@@ -68,7 +70,9 @@ Hovering over an icon shows a panel with the location name and the chosen detail
 The panel shows a large, detailed version of the weather picture with a soft glow behind it.
 The panel background runs from very dark blue at the top to dark blue at the bottom. It stretches with the number of details shown. The text is white with pale blue labels.
 The panel has rounded corners and a soft shadow.
-The details to show are chosen in the right-click menu. The choices are conditions, temperature, feels like, 24 hour high and low, 24 hour change, dew point, heat index, wind chill, humidity, wind and gusts, UV index, pressure and trend, visibility, cloud ceiling, rain for 1, 6 and 24 hours, snow for 24 hours, sunrise, sunset and observation time. "Show all" and "Reset to defaults" are in the same menu.
+The details to show are chosen in the right-click menu. The choices are conditions, temperature, feels like, 24 hour high and low, 24 hour change, dew point, heat index, wind chill, humidity, wind and gusts, UV index, pressure and trend, visibility, cloud ceiling, rain for 1, 6 and 24 hours, snow for 24 hours, sunrise, sunset, moon phase, moonrise, moonset and observation time. "Show all" and "Reset to defaults" are in the same menu.
+The hover detail "Moon phase" shows the phase name and the lit percentage, by day and by night. It is on by default.
+The hover details "Moonrise" and "Moonset" show the next moonrise and the next moonset. A time on a later day starts with the weekday, for example "Thu 2:58 AM". They are off by default.
 The hover detail "Nearest station" shows the closest official weather station with its code and distance, for example "Fairfield (KFFL), 3.1 mi". It is off by default. The app looks it up once per location and keeps it for 30 days. weather.com blends many sources for the current conditions of the exact location, so the station is shown for reference.
 The right-click menu also has "Check for updates now", "Restart FluentWeather (app and tray icons)", "Close FluentWeather window", "Exit tray icons" and "Exit tray icons and close FluentWeather".
 "Close FluentWeather window" closes the window like its X button, so Windows remembers the window size and position. If the app still runs after 4 seconds, the tray program ends it.

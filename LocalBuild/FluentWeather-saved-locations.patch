@@ -124,16 +124,18 @@ index d6f4fb815bd7dc1c66b837d7424c999a76ee5d76..479e2e553987162bbf19310974c55b1b
      }
 diff --git a/FluentWeather/Models/CurrentConditionsResponse.cs b/FluentWeather/Models/CurrentConditionsResponse.cs
 new file mode 100644
-index 0000000000000000000000000000000000000000..74dd4cd02a0440dadd93d2fd2efc04c6bc4d9af2
+index 0000000000000000000000000000000000000000..b9bf91728ffcce5b4ae3e91417da314a8bf245d7
 --- /dev/null
 +++ b/FluentWeather/Models/CurrentConditionsResponse.cs
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,29 @@
++using System;
++using System.Collections.Generic;
 +using System.Text.Json.Serialization;
 +
 +namespace FluentWeather.Models
 +{
 +    /// <summary>
-+    /// Small response with only the current conditions and the place name.
++    /// Small response with the current conditions, the place name and the moon times of the next days.
 +    /// Used to keep the tray icons up to date for every saved location.
 +    /// </summary>
 +    public class CurrentConditionsResponse
@@ -143,6 +145,16 @@ index 0000000000000000000000000000000000000000..74dd4cd02a0440dadd93d2fd2efc04c6
 +
 +        [JsonPropertyName("v3-location-point")]
 +        public V3LocationPoint? v3locationpoint { get; set; }
++
++        [JsonPropertyName("v3-wx-forecast-daily-3day")]
++        public MoonTimes? v3wxforecastdaily3day { get; set; }
++    }
++
++    /// <summary>Only the moonrise and moonset times of the daily forecast. Both lists can hold nulls.</summary>
++    public class MoonTimes
++    {
++        public List<DateTimeOffset?>? moonriseTimeLocal { get; set; }
++        public List<DateTimeOffset?>? moonsetTimeLocal { get; set; }
 +    }
 +}
 diff --git a/FluentWeather/Models/SavedLocation.cs b/FluentWeather/Models/SavedLocation.cs
@@ -496,10 +508,10 @@ index 0000000000000000000000000000000000000000..418740c8142516b859301a66e4f3c936
 +}
 diff --git a/FluentWeather/Services/TrayWeatherFile.cs b/FluentWeather/Services/TrayWeatherFile.cs
 new file mode 100644
-index 0000000000000000000000000000000000000000..eb210079df85f0157e7bcba5e3ab24b5177f95f4
+index 0000000000000000000000000000000000000000..2245bccb50f417a737774bee77983ec0e5b5a189
 --- /dev/null
 +++ b/FluentWeather/Services/TrayWeatherFile.cs
-@@ -0,0 +1,317 @@
+@@ -0,0 +1,349 @@
 +using System;
 +using System.Collections.Generic;
 +using System.Globalization;
@@ -547,7 +559,9 @@ index 0000000000000000000000000000000000000000..eb210079df85f0157e7bcba5e3ab24b5
 +            try
 +            {
 +                var units = await VariousUtils.GetUnitsCode();
-+                var text = await FormatBlockAsync(data.v3wxobservationscurrent, data.v3locationpoint.LocationV3, units);
++                var daily = data.v3wxforecastdaily10day;
++                var text = await FormatBlockAsync(data.v3wxobservationscurrent, data.v3locationpoint.LocationV3, units,
++                    daily?.moonriseTimeLocal, daily?.moonsetTimeLocal);
 +                await WriteFileAsync(CurrentFileName, text);
 +            }
 +            catch (Exception)
@@ -575,7 +589,8 @@ index 0000000000000000000000000000000000000000..eb210079df85f0157e7bcba5e3ab24b5
 +                    return;
 +
 +                var units = await VariousUtils.GetUnitsCode();
-+                var text = await FormatBlockAsync(data.v3wxobservationscurrent, data.v3locationpoint.LocationV3, units);
++                var text = await FormatBlockAsync(data.v3wxobservationscurrent, data.v3locationpoint.LocationV3, units,
++                    data.v3wxforecastdaily3day?.moonriseTimeLocal, data.v3wxforecastdaily3day?.moonsetTimeLocal);
 +                await WriteFileAsync(CurrentFileName, text);
 +            }
 +            catch (Exception)
@@ -614,7 +629,8 @@ index 0000000000000000000000000000000000000000..eb210079df85f0157e7bcba5e3ab24b5
 +                            return previous.TryGetValue(location.PlaceId, out var old) ? old : null;
 +
 +                        return "[" + location.PlaceId + "]\n" +
-+                               await FormatBlockAsync(data.v3wxobservationscurrent, data.v3locationpoint.LocationV3, units);
++                               await FormatBlockAsync(data.v3wxobservationscurrent, data.v3locationpoint.LocationV3, units,
++                                   data.v3wxforecastdaily3day?.moonriseTimeLocal, data.v3wxforecastdaily3day?.moonsetTimeLocal);
 +                    }
 +                    catch (Exception)
 +                    {
@@ -681,7 +697,8 @@ index 0000000000000000000000000000000000000000..eb210079df85f0157e7bcba5e3ab24b5
 +            }
 +        }
 +
-+        private static async Task<string> FormatBlockAsync(V3WxObservationsCurrent obs, LocationV3 loc, WetUnits units)
++        private static async Task<string> FormatBlockAsync(V3WxObservationsCurrent obs, LocationV3 loc, WetUnits units,
++            List<DateTimeOffset?>? moonrises = null, List<DateTimeOffset?>? moonsets = null)
 +        {
 +            var place = new[] { loc.displayName, loc.city }.FirstOrDefault(s => !string.IsNullOrEmpty(s)) ?? string.Empty;
 +            var fullPlace = string.Join(", ", new[] { loc.displayName, loc.adminDistrict, loc.country }
@@ -694,12 +711,17 @@ index 0000000000000000000000000000000000000000..eb210079df85f0157e7bcba5e3ab24b5
 +                .Append("feels=").Append(obs.temperatureFeelsLike).Append('\n')
 +                .Append("unit=").Append(MeasureUnitUtils.GetTemperatureUnits(units)).Append('\n')
 +                .Append("icon=").Append(obs.iconCode).Append('\n')
++                // "D" or "N". weather.com sends the same "Cloudy" code by day and by night, so the tray
++                // needs this to show the moon behind the cloud at night.
++                .Append("daynight=").Append(OneLine(obs.dayOrNight ?? string.Empty)).Append('\n')
 +                // The tray draws the moon as it looks from this latitude (lit side mirrored south of the equator).
 +                .Append("lat=").Append(loc.latitude.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('\n')
 +                .Append("phrase=").Append(OneLine(obs.wxPhraseLong ?? obs.cloudCoverPhrase)).Append('\n')
 +                .Append("observed=").Append(obs.validTimeLocal.ToString("o")).Append('\n')
 +                .Append("written=").Append(DateTimeOffset.UtcNow.ToString("o")).Append('\n')
 +                .Append(await FormatDetailsAsync(obs, units))
++                .Append(await FormatMoonTimeAsync("Moonrise", moonrises))
++                .Append(await FormatMoonTimeAsync("Moonset", moonsets))
 +                .Append(await FormatStationAsync(loc, units))
 +                .ToString();
 +        }
@@ -756,6 +778,28 @@ index 0000000000000000000000000000000000000000..eb210079df85f0157e7bcba5e3ab24b5
 +            Add("Sunset", await VariousUtils.GetTimeBasedOnUserSettings(obs.sunsetTimeLocal.DateTime));
 +            Add("Observed", await VariousUtils.GetTimeBasedOnUserSettings(obs.validTimeLocal.DateTime));
 +            return sb.ToString();
++        }
++
++        // The next moonrise or moonset that is still to come, for example "d.Moonrise=1:51 AM".
++        // A time on a later day starts with the weekday, for example "d.Moonset=Thu 2:38 PM".
++        // The forecast list can start with the day before, and a day can have no moonrise at all.
++        private static async Task<string> FormatMoonTimeAsync(string key, List<DateTimeOffset?>? times)
++        {
++            if (times == null)
++                return string.Empty;
++
++            var now = DateTimeOffset.UtcNow;
++            foreach (var entry in times)
++            {
++                if (entry is not DateTimeOffset time || time <= now)
++                    continue;
++
++                var text = await VariousUtils.GetTimeBasedOnUserSettings(time.DateTime);
++                if (time.Date != now.ToOffset(time.Offset).Date)
++                    text = time.ToString("ddd", CultureInfo.CurrentCulture) + " " + text;
++                return "d." + key + "=" + OneLine(text) + "\n";
++            }
++            return string.Empty;
 +        }
 +
 +        // Reads the existing all-locations file, so a failed request can keep the last good data.
@@ -958,7 +1002,7 @@ index 80cba1cbfc056ad6fd9df6755b13dbcf47c8dbd4..278a3d3552d3db5abf3d2b03f6cc4606
                                  Background="{ThemeResource AutoSuggestBoxSuggestionsListBackground}"
                                  BorderBrush="{ThemeResource AutoSuggestBoxSuggestionsListBorderBrush}"
 diff --git a/FluentWeather/Utils/ApiUtils.cs b/FluentWeather/Utils/ApiUtils.cs
-index 9c07a12037569243fc915fcf6b3fda7befeed576..0e2dfca67ea9eb79d50ba25f8271358a1cd2dbe6 100644
+index 9c07a12037569243fc915fcf6b3fda7befeed576..364880650310d637ee12f2c6c87a89636bd8e77e 100644
 --- a/FluentWeather/Utils/ApiUtils.cs
 +++ b/FluentWeather/Utils/ApiUtils.cs
 @@ -1,12 +1,17 @@
@@ -980,7 +1024,7 @@ index 9c07a12037569243fc915fcf6b3fda7befeed576..0e2dfca67ea9eb79d50ba25f8271358a
  
          private static readonly HttpClient SharedClient = new()
          {
-@@ -30,5 +35,67 @@ namespace FluentWeather.Utils
+@@ -30,5 +35,76 @@ namespace FluentWeather.Utils
  
              return response;
          }
@@ -1030,17 +1074,26 @@ index 9c07a12037569243fc915fcf6b3fda7befeed576..0e2dfca67ea9eb79d50ba25f8271358a
 +            return [stationName, stationId, km, mi];
 +        }
 +
-+        /// <summary>Current conditions and place name only. Much smaller than GetFullData.</summary>
++        /// <summary>
++        /// Current conditions, place name and the 3-day forecast (for moonrise and moonset), about 6 KB.
++        /// Much smaller than GetFullData. If the request with the forecast fails, it is sent again
++        /// without it, so the current conditions still arrive.
++        /// </summary>
 +        public static async Task<HttpResponseMessage> GetCurrentConditions(string placeId)
 +        {
 +            if (string.IsNullOrEmpty(placeId))
 +                throw new ArgumentNullException(nameof(placeId));
 +
-+            var response = await SharedClient.GetAsync(
-+                "aggcommon/v3-wx-observations-current;v3-location-point?format=json&placeid="
-+                + Uri.EscapeDataString(placeId)
-+                + "&units=" + await VariousUtils.GetUnitsCode()
-+                + "&language=" + SystemLanguage + "&apiKey=793db2b6128c4bc2bdb2b6128c0bc230");
++            var query = "?format=json&placeid=" + Uri.EscapeDataString(placeId)
++                        + "&units=" + await VariousUtils.GetUnitsCode()
++                        + "&language=" + SystemLanguage + "&apiKey=793db2b6128c4bc2bdb2b6128c0bc230";
++
++            var response = await SharedClient.GetAsync("aggcommon/v3-wx-observations-current;v3-location-point;v3-wx-forecast-daily-3day" + query);
++            if (!response.IsSuccessStatusCode)
++            {
++                response.Dispose();
++                response = await SharedClient.GetAsync("aggcommon/v3-wx-observations-current;v3-location-point" + query);
++            }
 +
 +            response.EnsureSuccessStatusCode();
 +

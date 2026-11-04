@@ -28,6 +28,13 @@
 .PARAMETER Quiet
     Show a notification only when something was installed or an error occurred.
 
+.PARAMETER StoreTest
+    Builds the version prepared for the developer (FluentWeather-store-features.patch next to
+    this script) as a separate test app named "FluentWeather (Store test)". It has the tray icons
+    inside the app package. Your own FluentWeather, its data, its tray icons and its update state
+    are not changed. Uses the certificate, Git, Build Tools and relay from your Setup.
+    Uninstall the test app in Settings > Apps or with "Remove Store test.cmd".
+
 .PARAMETER Scheduled
     Set by the logon task. The script then checks GitHub only if the last check is older
     than CheckEveryDays in config.json (default 30). A manual run always checks.
@@ -41,7 +48,8 @@ param(
     [switch]$Force,
     [string]$Tag,
     [switch]$Quiet,
-    [switch]$Scheduled
+    [switch]$Scheduled,
+    [switch]$StoreTest
 )
 
 Set-StrictMode -Version 3.0
@@ -63,6 +71,21 @@ $SrcDir    = Join-Path $WorkDir 'src'
 $OutRoot   = Join-Path $WorkDir 'out'
 $LogDir    = Join-Path $WorkDir 'logs'
 $StatePath = Join-Path $WorkDir 'state.json'
+
+# Store test: a separate app next to your own build. See -StoreTest above.
+$LocalInstallDir = Join-Path $env:ProgramFiles 'FluentWeatherLocal'
+if ($StoreTest) {
+    $PackageName  = 'FluentWeather.StoreTest'
+    $DisplayName  = 'FluentWeather (Store test)'
+    $ProtocolName = ''    # the store version registers its own "fluentweather" link
+    $TaskTitle    = 'FluentWeather Store test'
+    $InstallDir   = $LocalInstallDir    # config.json and the relay from your Setup
+    $ConfigPath   = Join-Path $InstallDir 'config.json'
+    $PatchPath    = Join-Path $PSScriptRoot 'FluentWeather-store-features.patch'
+    $OutRoot      = Join-Path $WorkDir 'out-storetest'
+    $StatePath    = Join-Path $WorkDir 'state-storetest.json'
+    $Force        = [switch]$true
+}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -248,7 +271,7 @@ function Set-PackageIdentity([string]$CertSubject, [int]$Revision) {
         $extensions = $xml.CreateElement('Extensions', $fNs)
         $null = $app.AppendChild($extensions)
     }
-    if (-not $extensions.SelectSingleNode("uap:Extension/uap:Protocol[@Name='$ProtocolName']", $ns)) {
+    if ($ProtocolName -and -not $extensions.SelectSingleNode("uap:Extension/uap:Protocol[@Name='$ProtocolName']", $ns)) {
         $ext = $xml.CreateElement('uap', 'Extension', $uapNs)
         $ext.SetAttribute('Category', 'windows.protocol')
         $protocol = $xml.CreateElement('uap', 'Protocol', $uapNs)
@@ -455,6 +478,31 @@ function Update-TrayFiles([bool]$CopyIcon) {
         New-Item -ItemType Directory -Path $iconTarget -Force | Out-Null
         Copy-Item -Path (Join-Path $iconSource '*.png') -Destination $iconTarget -Force
     }
+}
+
+# After a Store test install: checks that the tray icons program is in the package, closes your own
+# tray icons so only the test icons show, and opens the test app.
+function Complete-StoreTest($Package) {
+    $trayExe = Join-Path $Package.InstallLocation 'FluentWeatherTray\FluentWeatherTray.exe'
+    if (Test-Path -LiteralPath $trayExe) {
+        Write-UpdateLog 'The tray icons program is inside the package.'
+    } else {
+        Write-UpdateLog "WARNING: $trayExe is missing. The Tray icons setting cannot start the icons."
+    }
+
+    Get-Process -Name 'FluentWeatherTray' -ErrorAction SilentlyContinue | ForEach-Object {
+        $path = $null
+        try { $path = $_.Path } catch { }
+        if ($path -and $path.StartsWith($LocalInstallDir + '\', [StringComparison]::OrdinalIgnoreCase)) {
+            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+            Write-UpdateLog 'Closed your own tray icons for the test. Start menu "FluentWeather tray icons" starts them again.'
+        }
+    }
+
+    Write-UpdateLog "Installed $DisplayName. Opening it now."
+    Write-UpdateLog 'Pick a location, then open the settings (gear button) and set "Tray icons" to On.'
+    Start-Process -FilePath (Join-Path $env:WINDIR 'explorer.exe') -ArgumentList "shell:AppsFolder\$($Package.PackageFamilyName)!App"
+    Show-Toast $TaskTitle "$DisplayName is installed. Set Tray icons to On in its settings."
 }
 
 function Remove-OldFiles([string]$KeepOutDir) {
@@ -786,7 +834,7 @@ try {
 
             Initialize-Source $releaseTag
 
-            Write-UpdateLog 'Applying the saved-locations patch'
+            Write-UpdateLog "Applying $(Split-Path -Leaf $PatchPath)"
             Invoke-Git @('-C', $SrcDir, 'apply', '--3way', '--whitespace=nowarn', $PatchPath) -FailCode 2 | Out-Null
 
             $revision = Get-NextRevision $state $installed
@@ -825,12 +873,18 @@ try {
                 LastResult     = 'Installed'
             }
 
-            Set-StartupShortcut $startApp
-            Update-TrayFiles $true
-            Remove-OldFiles $outDir
+            if ($StoreTest) {
+                Remove-OldFiles $outDir
+                Complete-StoreTest $pkg
+            }
+            else {
+                Set-StartupShortcut $startApp
+                Update-TrayFiles $true
+                Remove-OldFiles $outDir
 
-            Write-UpdateLog "Installed FluentWeather $releaseTag with saved locations."
-            Show-Toast $TaskTitle "FluentWeather $releaseTag with saved locations is installed."
+                Write-UpdateLog "Installed FluentWeather $releaseTag with saved locations."
+                Show-Toast $TaskTitle "FluentWeather $releaseTag with saved locations is installed."
+            }
         }
     }
 }

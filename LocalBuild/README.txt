@@ -213,10 +213,11 @@ FluentWeather is a sandboxed app. Windows does not let that kind of app keep an
 icon in the notification area or minimize to it. A small separate program,
 FluentWeatherTray.exe, provides two icons side by side. The temperature is on the
 left and the weather picture on its right. Drag them on the taskbar to change it.
-    the weather picture for the current conditions, one of 14:
+    the weather picture for the current conditions, one of 15:
         sunny (a full sun), clear night (the moon in its current phase),
         partly cloudy (sun partly behind a cloud), partly cloudy night (moon
-        partly behind a cloud), cloudy, fog (horizontal bands),
+        partly behind a cloud), cloudy, cloudy night (the lit edge of the moon
+        behind a cloud), fog (horizontal bands),
         light rain (cloud and 2 drops), rain (cloud and 4 drops),
         heavy rain (dark cloud and 7 drops), ice or mixed (cloud, drops and
         snowflakes: freezing rain, sleet, hail, wintry mix), thunderstorm
@@ -226,6 +227,9 @@ left and the weather picture on its right. Drag them on the taskbar to change it
     The moon shows its real phase for today. North of the equator a waxing moon is
     lit on the right and a waning moon on the left. South of the equator the sides
     are swapped, so each saved city shows the moon as it looks there.
+    The moon is drawn in a light brown. The hover detail "Moon phase" shows the
+    phase name and the lit percentage. "Moonrise" and "Moonset" show the next
+    moonrise and moonset. A time on a later day starts with the weekday.
     The tray program draws these pictures itself, so they stay sharp at every display
     scale. They follow the light or dark taskbar.
     The picture follows the weather code and, for English condition text, the words in
@@ -245,7 +249,7 @@ While the app window is closed or minimized, the tray program also asks the app 
 5 minutes to refresh the files. Windows runs this inside the app for a few seconds,
 without opening its window. The app downloads the data, so the firewall rules stay the
 same, and the tray program still makes no internet connection. Each refresh downloads
-about 2 KB for the app's city and for each saved city. With the window open, the app's
+about 6 KB for the app's city and for each saved city. With the window open, the app's
 own "Auto refresh" setting (5 to 60 minutes) applies instead. Turn this off or on with
 "Update weather every 5 minutes while the window is closed" in the right-click menu.
 Setup turns it on when Windows' C# compiler can use the Windows SDK. If it cannot,
@@ -283,8 +287,10 @@ Hover over either icon         a panel with the city and the details you choose.
                                24 h change, dew point, heat index, wind chill,
                                humidity, wind and gusts, UV index, pressure and trend,
                                visibility, cloud ceiling, rain (1, 6, 24 h),
-                               snow (24 h), sunrise, sunset, observation time,
-                               nearest station (off by default).
+                               snow (24 h), sunrise, sunset, moon phase,
+                               moonrise, moonset, observation time,
+                               nearest station. Moonrise, moonset and nearest
+                               station are off by default.
                                "Show all" and "Reset to defaults" are at the bottom.
 
 The number shows "--" when there is no data yet, or when the data is older than

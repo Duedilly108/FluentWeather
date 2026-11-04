@@ -112,7 +112,7 @@ $FilesToCopy   = @(
     'FluentWeather.ico'
 )
 $UninstallKey  = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\FluentWeatherLocal'
-$SetupVersion  = '31'
+$SetupVersion  = '33'
 $MakeInstallerShortcut = 'Make FluentWeather installer.lnk'
 
 function Write-Step([string]$Text) { Write-Host "[*] $Text" -ForegroundColor Cyan }

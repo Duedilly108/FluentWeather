@@ -5,8 +5,8 @@
 // C:\Program Files\FluentWeatherLocal. It starts at sign-in from your Startup folder.
 //
 // It shows two icons side by side in the notification area, the number on the left:
-//   1. the weather picture for the current conditions, one of 14: sunny, clear night (the moon in
-//      its current phase), partly cloudy, partly cloudy night, cloudy, fog, light rain, rain,
+//   1. the weather picture for the current conditions, one of 15: sunny, clear night (the moon in
+//      its current phase), partly cloudy, partly cloudy night, cloudy, cloudy night, fog, light rain, rain,
 //      heavy rain, ice or mixed, thunderstorm, severe storm, light snow and heavy snow.
 //      The pictures are drawn in code (WeatherArt).
 //   2. the temperature or the "feels like" temperature, as a number
@@ -57,8 +57,8 @@ using Windows.Foundation.Collections;
 [assembly: System.Reflection.AssemblyDescription("Shows the FluentWeather temperature and weather icon in the notification area.")]
 [assembly: System.Reflection.AssemblyProduct("FluentWeather Local")]
 [assembly: System.Reflection.AssemblyCompany("Built on this PC by FluentWeatherLocal Setup")]
-[assembly: System.Reflection.AssemblyVersion("1.15.1.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.15.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.17.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.17.0.0")]
 
 namespace FluentWeatherLocal
 {
@@ -110,6 +110,7 @@ namespace FluentWeatherLocal
         public int Feels;
         public string Unit = string.Empty;
         public int IconCode = -1;
+        public bool IsNight;           // "daynight=N" from the app
         public double Latitude = 45;   // north of the equator unless the app says otherwise
         public string Phrase = string.Empty;
         public DateTime ObservedLocal;
@@ -143,6 +144,10 @@ namespace FluentWeatherLocal
             new[] { "Snow24h", "Snow, last 24 h" },
             new[] { "Sunrise", "Sunrise" },
             new[] { "Sunset", "Sunset" },
+            // The tray works out the moon phase itself. The app writes the next moonrise and moonset.
+            new[] { "Moon", "Moon phase" },
+            new[] { "Moonrise", "Moonrise" },
+            new[] { "Moonset", "Moonset" },
             new[] { "Observed", "Observed at" },
             // The nearest official station that reports (usually an airport). weather.com blends many
             // sources for the exact location, so the conditions are not taken from this station alone.
@@ -151,8 +156,11 @@ namespace FluentWeatherLocal
 
         public static readonly string[] Defaults =
         {
-            "Conditions", "Temperature", "FeelsLike", "HighLow", "Humidity", "Wind", "UV", "Rain24h", "Sunrise", "Sunset", "Observed"
+            "Conditions", "Temperature", "FeelsLike", "HighLow", "Humidity", "Wind", "UV", "Rain24h", "Sunrise", "Sunset", "Moon", "Observed"
         };
+
+        // Raised when a new detail joins the defaults. Saved choices from an older version get it once.
+        public const int Version = 2;
     }
 
     // The 14 weather pictures of the tray icon and the hover panel. They are drawn in code on a
@@ -174,7 +182,8 @@ namespace FluentWeatherLocal
         Fog = 10,
         Severe = 11,
         ClearNight = 12,
-        PartlyCloudyNight = 13
+        PartlyCloudyNight = 13,
+        CloudyNight = 14
     }
 
     internal static class WeatherArt
@@ -226,9 +235,13 @@ namespace FluentWeatherLocal
         //   - the code shows rain or snow and the text names the strength. weather.com uses code 11
         //     for "Showers" and "Light Rain", and code 12 for "Rain" and "Heavy Rain".
         // The text is English unless the app language is changed. In other languages the code decides.
-        internal static WeatherKind FromReading(int code, string phrase)
+        // weather.com sends the same "Cloudy" code by day and by night. At night (daynight=N from the
+        // app) the picture shows the edge of the moon behind the cloud.
+        internal static WeatherKind FromReading(int code, string phrase, bool night = false)
         {
             var kind = FromIconCode(code);
+            if (night && kind == WeatherKind.Cloudy)
+                kind = WeatherKind.CloudyNight;
             if (kind == WeatherKind.None || string.IsNullOrEmpty(phrase))
                 return kind;
 
@@ -244,7 +257,7 @@ namespace FluentWeatherLocal
 
             var isRain = kind == WeatherKind.LightRain || kind == WeatherKind.Rain || kind == WeatherKind.HeavyRain;
             var isSnow = kind == WeatherKind.LightSnow || kind == WeatherKind.HeavySnow;
-            var isDry = kind == WeatherKind.Sunny || kind == WeatherKind.ClearNight || kind == WeatherKind.Cloudy ||
+            var isDry = kind == WeatherKind.Sunny || kind == WeatherKind.ClearNight || kind == WeatherKind.Cloudy || kind == WeatherKind.CloudyNight ||
                         kind == WeatherKind.PartlyCloudy || kind == WeatherKind.PartlyCloudyNight || kind == WeatherKind.Fog;
 
             if (thunder && (isDry || isRain || isSnow || kind == WeatherKind.Ice))
@@ -282,6 +295,7 @@ namespace FluentWeatherLocal
                 case WeatherKind.Sunny: return "Sunny";
                 case WeatherKind.PartlyCloudy: return "Partly cloudy";
                 case WeatherKind.Cloudy: return "Cloudy";
+                case WeatherKind.CloudyNight: return "Cloudy night";
                 case WeatherKind.LightRain: return "Light rain";
                 case WeatherKind.Rain: return "Rain";
                 case WeatherKind.HeavyRain: return "Heavy rain";
@@ -367,6 +381,9 @@ namespace FluentWeatherLocal
                     break;
                 case WeatherKind.Cloudy:
                     DrawCloud(g, 6, 14, 1.2f, false, light, detailed);
+                    break;
+                case WeatherKind.CloudyNight:
+                    DrawCloudyNight(g, light, detailed, latitude);
                     break;
                 // In the three rain pictures the cloud ends 40% down from the top, so the drops have
                 // the lower 60% and stay easy to count at 16 pixels: 2, 4 or 7 drops.
@@ -609,18 +626,54 @@ namespace FluentWeatherLocal
             }
         }
 
+        // Overcast at night: the edge of the moon shows behind the cloud, on the moon's lit side, so the
+        // visible part is the lit edge. At tray sizes more of the moon shows, so it stays visible at 16 px.
+        private static void DrawCloudyNight(Graphics g, bool light, bool detailed, double latitude)
+        {
+            var waxing = MoonPhase(DateTime.UtcNow) < 0.5;
+            var litRight = waxing != (latitude < 0);
+            if (litRight)
+            {
+                if (detailed)
+                {
+                    DrawStar(g, 14, 14, 4, light);
+                    DrawMoon(g, 69, 27, 21, light, true, latitude);
+                    DrawCloud(g, 6, 20, 1.14f, false, light, true);
+                }
+                else
+                {
+                    DrawMoon(g, 75, 25, 22, light, false, latitude);
+                    DrawCloud(g, 2, 24, 1.1f, false, light, false);
+                }
+            }
+            else
+            {
+                if (detailed)
+                {
+                    DrawStar(g, 86, 14, 4, light);
+                    DrawMoon(g, 31, 31, 21, light, true, latitude);
+                    DrawCloud(g, 8, 20, 1.14f, false, light, true);
+                }
+                else
+                {
+                    DrawMoon(g, 25, 25, 22, light, false, latitude);
+                    DrawCloud(g, 10, 24, 1.1f, false, light, false);
+                }
+            }
+        }
+
         // The moon in its phase today. The lit part grows on the right while waxing and shrinks
         // toward the left while waning, as seen north of the equator. South of it, the sides swap.
         private static void DrawMoon(Graphics g, float cx, float cy, float r, bool light, bool detailed, double latitude)
         {
             var phase = MoonPhase(DateTime.UtcNow);                 // 0 new, 0.25 first quarter, 0.5 full, 0.75 last quarter
             var disc = new RectangleF(cx - r, cy - r, 2 * r, 2 * r);
-            var edgeColor = Edge(light, Color.FromArgb(255, 120, 110, 70));
+            var edgeColor = Edge(light, Color.FromArgb(255, 96, 88, 78));
             using (var edge = new Pen(edgeColor, 4f))
                 g.DrawEllipse(edge, disc);
 
             // The dark part of the moon stays faintly visible, so the round shape is clear in every phase.
-            using (var dark = new SolidBrush(light ? Color.FromArgb(255, 150, 158, 172) : Color.FromArgb(255, 70, 78, 92)))
+            using (var dark = new SolidBrush(light ? Color.FromArgb(255, 94, 96, 106) : Color.FromArgb(255, 64, 68, 78)))
                 g.FillEllipse(dark, disc);
 
             using (var lit = LitPath(cx, cy, r, phase, latitude < 0))
@@ -632,15 +685,15 @@ namespace FluentWeatherLocal
                     using (var brush = new PathGradientBrush(lit))
                     {
                         brush.CenterPoint = new PointF(cx, cy);
-                        // A deeper gold on a light background, so the moon stands out.
-                        brush.CenterColor = light ? Color.FromArgb(255, 255, 240, 170) : Color.FromArgb(255, 255, 252, 230);
-                        brush.SurroundColors = new[] { light ? Color.FromArgb(255, 232, 196, 90) : Color.FromArgb(255, 238, 226, 170) };
+                        // A light brown moon. A deeper brown on a light background, so the moon stands out.
+                        brush.CenterColor = light ? Color.FromArgb(255, 226, 200, 162) : Color.FromArgb(255, 240, 222, 194);
+                        brush.SurroundColors = new[] { light ? Color.FromArgb(255, 180, 146, 104) : Color.FromArgb(255, 200, 172, 134) };
                         g.FillPath(brush, lit);
                     }
                     // A few craters on the lit part.
                     var state = g.Save();
                     g.SetClip(lit);
-                    using (var crater = new SolidBrush(Color.FromArgb(70, 160, 150, 110)))
+                    using (var crater = new SolidBrush(Color.FromArgb(70, 150, 126, 96)))
                     {
                         g.FillEllipse(crater, cx - r * 0.45f, cy - r * 0.35f, r * 0.32f, r * 0.32f);
                         g.FillEllipse(crater, cx + r * 0.15f, cy + r * 0.10f, r * 0.42f, r * 0.42f);
@@ -651,7 +704,7 @@ namespace FluentWeatherLocal
                 }
                 else
                 {
-                    using (var brush = new SolidBrush(light ? Color.FromArgb(255, 240, 205, 90) : Color.FromArgb(255, 252, 240, 190)))
+                    using (var brush = new SolidBrush(light ? Color.FromArgb(255, 184, 150, 108) : Color.FromArgb(255, 226, 202, 166)))
                         g.FillPath(brush, lit);
                 }
             }
@@ -812,6 +865,7 @@ namespace FluentWeatherLocal
                     break;
                 case WeatherKind.ClearNight:
                 case WeatherKind.PartlyCloudyNight:
+                case WeatherKind.CloudyNight:
                     top = light ? Color.FromArgb(220, 224, 244) : Color.FromArgb(16, 24, 52);
                     bottom = light ? Color.FromArgb(244, 245, 252) : Color.FromArgb(34, 36, 48);
                     break;
@@ -1279,7 +1333,7 @@ namespace FluentWeatherLocal
             }
             else
             {
-                newPicture = LoadWeatherIcon(reading.IconCode, reading.Phrase, reading.Latitude, size, light) ?? LoadAppIcon(size);
+                newPicture = LoadWeatherIcon(reading.IconCode, reading.Phrase, reading.IsNight, reading.Latitude, size, light) ?? LoadAppIcon(size);
                 var value = _showFeelsLike ? reading.Feels : reading.Temp;
                 newNumber = RenderNumber(value.ToString(CultureInfo.InvariantCulture), size, light);
                 tip = BuildTooltip(reading);
@@ -1359,9 +1413,19 @@ namespace FluentWeatherLocal
             var rows = new List<KeyValuePair<string, string>>();
             foreach (var entry in DetailCatalog.All)
             {
+                if (!_hoverDetails.Contains(entry[0]))
+                    continue;
                 string value;
-                if (_hoverDetails.Contains(entry[0]) && r.Details.TryGetValue(entry[0], out value))
+                if (entry[0] == "Moon")
+                {
+                    var phase = WeatherArt.MoonPhase(DateTime.UtcNow);
+                    var lit = (int)Math.Round(100 * (1 - Math.Cos(2 * Math.PI * phase)) / 2);
+                    rows.Add(new KeyValuePair<string, string>(entry[1], WeatherArt.MoonPhaseName(phase) + ", " + lit + "% lit"));
+                }
+                else if (r.Details.TryGetValue(entry[0], out value))
+                {
                     rows.Add(new KeyValuePair<string, string>(entry[1], value));
+                }
             }
             if (rows.Count == 0)
                 rows.Add(new KeyValuePair<string, string>("Temperature", r.Temp + Degree + r.Unit + ", feels like " + r.Feels + Degree + r.Unit));
@@ -1369,13 +1433,7 @@ namespace FluentWeatherLocal
             var title = string.IsNullOrEmpty(r.FullPlace) ? r.Place : r.FullPlace;
             var footer = (_trayCity == AppCity ? "Same city as the app. " : "Chosen in the tray. ") +
                          "Updated " + r.WrittenUtc.ToLocalTime().ToString("t", CultureInfo.CurrentCulture);
-            var kind = WeatherArt.FromReading(r.IconCode, r.Phrase);
-            if (kind == WeatherKind.ClearNight || kind == WeatherKind.PartlyCloudyNight)
-            {
-                var phase = WeatherArt.MoonPhase(DateTime.UtcNow);
-                var lit = (int)Math.Round(100 * (1 - Math.Cos(2 * Math.PI * phase)) / 2);
-                rows.Add(new KeyValuePair<string, string>("Moon", WeatherArt.MoonPhaseName(phase) + ", " + lit + "% lit"));
-            }
+            var kind = WeatherArt.FromReading(r.IconCode, r.Phrase, r.IsNight);
             _hover.SetContent(title, rows, footer, kind, light, r.Latitude);
         }
 
@@ -1453,9 +1511,9 @@ namespace FluentWeatherLocal
         }
 
         // One of the eight weather pictures, drawn for the taskbar color. Null for an unknown code.
-        private static Icon LoadWeatherIcon(int iconCode, string phrase, double latitude, int size, bool lightTaskbar)
+        private static Icon LoadWeatherIcon(int iconCode, string phrase, bool night, double latitude, int size, bool lightTaskbar)
         {
-            var kind = WeatherArt.FromReading(iconCode, phrase);
+            var kind = WeatherArt.FromReading(iconCode, phrase, night);
             if (kind == WeatherKind.None)
                 return null;
             try
@@ -1624,6 +1682,7 @@ namespace FluentWeatherLocal
                 return null;
             int icon;
             r.IconCode = TryInt(values, "icon", out icon) ? icon : -1;
+            r.IsNight = string.Equals(Get(values, "daynight"), "N", StringComparison.OrdinalIgnoreCase);
             double latitude;
             if (double.TryParse(Get(values, "lat"), NumberStyles.Float, CultureInfo.InvariantCulture, out latitude))
                 r.Latitude = latitude;
@@ -1727,6 +1786,8 @@ namespace FluentWeatherLocal
             {
                 if (!File.Exists(SettingsPath))
                     return;
+                var version = 1;
+                var hadDetails = false;
                 foreach (var line in File.ReadAllLines(SettingsPath))
                 {
                     var eq = line.IndexOf('=');
@@ -1736,12 +1797,20 @@ namespace FluentWeatherLocal
                     if (k.Equals("show", StringComparison.OrdinalIgnoreCase))
                         _showFeelsLike = v.Equals("feels", StringComparison.OrdinalIgnoreCase);
                     else if (k.Equals("details", StringComparison.OrdinalIgnoreCase))
+                    {
                         _hoverDetails = new List<string>(v.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries));
+                        hadDetails = true;
+                    }
+                    else if (k.Equals("detailsversion", StringComparison.OrdinalIgnoreCase))
+                        int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out version);
                     else if (k.Equals("city", StringComparison.OrdinalIgnoreCase) && v.Length > 0)
                         _trayCity = v;
                     else if (k.Equals("quickrefresh", StringComparison.OrdinalIgnoreCase))
                         _quickRefresh = !v.Equals("off", StringComparison.OrdinalIgnoreCase);
                 }
+                // Version 2 added "Moon phase" to the defaults. Before, the moon line showed by itself at night.
+                if (hadDetails && version < 2 && !_hoverDetails.Contains("Moon"))
+                    _hoverDetails.Add("Moon");
             }
             catch (Exception)
             {
@@ -1758,6 +1827,7 @@ namespace FluentWeatherLocal
                     "show=" + (_showFeelsLike ? "feels" : "temp") + "\r\n" +
                     "city=" + _trayCity + "\r\n" +
                     "details=" + string.Join(",", _hoverDetails) + "\r\n" +
+                    "detailsversion=" + DetailCatalog.Version.ToString(CultureInfo.InvariantCulture) + "\r\n" +
                     "quickrefresh=" + (_quickRefresh ? "on" : "off") + "\r\n");
             }
             catch (Exception)
