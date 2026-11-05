@@ -100,6 +100,37 @@ What the other person should know:
     They follow the firewall section below for FluentWeatherNet.exe and the app.
 
 
+Direct installer (to share the app you built)
+---------------------------------------------
+Start menu > "Make FluentWeather direct installer" makes a folder on your Desktop:
+    FluentWeather-Direct\FluentWeather-Setup.exe
+    FluentWeather-Direct\FluentWeather-Uninstall.exe
+    FluentWeather-Direct\README.txt
+and a zip of these three files, FluentWeather-Direct-<version>.zip.
+
+The setup holds the app as it is built and installed on your PC, signed again with
+a throwaway certificate, the Microsoft packages it needs and the tray icons program. The other PC installs it in about a minute. It needs no Visual Studio,
+no Git and no internet connection for the install.
+
+Windows builds both programs on your PC from FluentWeatherDirect.cs, with the C#
+compiler that ships with Windows. Make-DirectInstaller.cmd in
+C:\Program Files\FluentWeatherLocal does the same as the Start menu item.
+
+What the other person should know:
+    Your own signing certificate is never used. Each time, the direct installer
+    makes a throwaway certificate, signs a copy of the app with it, and deletes the
+    certificate and its private key from your PC. The setup adds the public part to
+    "Trusted People" of their PC, with one administrator approval. Nobody can sign
+    anything else with it, so their PC can only accept this one app package.
+    The installed app does not update itself. Send them a new direct installer after
+    each update. It installs over the old version and keeps their saved locations.
+    README.txt in the folder explains the install, the firewall and the uninstall.
+    The setup and the uninstaller are not signed by a publisher, so SmartScreen
+    shows "Windows protected your PC". They select More info, then Run anyway.
+    Do not run the direct installer on your own PC. It stops there, because your PC
+    already has the build.
+
+
 Where the files go
 ------------------
 C:\Program Files\FluentWeatherLocal
@@ -296,7 +327,10 @@ Hover over either icon         a panel with the city and the details you choose.
                                button. It then opens at that place. "Hover panel
                                next to the icons" in the right-click menu puts it
                                back. After the pointer leaves the icons, the panel
-                               stays 1.2 seconds, so you can reach it to drag it.
+                               stays 0.9 seconds, so you can reach it to drag it.
+                               The panel opens only when the pointer stays on the
+                               icons for the whole 1.2 seconds. If it leaves sooner,
+                               nothing opens.
 
 The number shows "--" when there is no data yet, or when the data is older than
 3 hours. Open the app once to refresh it. If it stays at "--", check that

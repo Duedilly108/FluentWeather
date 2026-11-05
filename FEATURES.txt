@@ -68,17 +68,18 @@ Left-clicking an icon opens the app at the location the tray shows.
 Left-clicking an icon again while the app window is the active window closes the window, so only the tray icons stay. A window behind other windows comes to the front instead.
 The right-click menu picks the location the tray shows. It lists each saved location with its temperature, plus "Same city as the app". The app window stays closed.
 Hovering over an icon shows a panel with the location name and the chosen details.
-The panel shows a large, detailed version of the weather picture with a soft glow behind it.
+The panel opens only when the pointer stays on the icons for the whole 1.2 seconds. If the pointer leaves sooner, nothing opens. Each new visit starts a new 1.2 seconds.
+The panel shows a detailed version of the weather picture with a soft glow behind it.
 The panel background runs from very dark blue at the top to dark blue at the bottom. It stretches with the number of details shown. The text is white with pale blue labels.
-The panel has rounded corners and a soft shadow.
+The panel has rounded corners and a soft shadow. It has one fixed width of 340 pixels at 100 percent display scale. A long location name, a long detail and the bottom line wrap onto more lines and are never cut off. The lines below the weather picture use the full width. The height follows the number of details.
 The hover panel can be dragged with the left mouse button. It then opens at that place. "Hover panel next to the icons" in the right-click menu puts it back.
-After the pointer leaves the icons and the panel, the panel stays 1.2 seconds more. This gives the pointer time to reach a panel at its saved place.
+After the pointer leaves the icons and the panel, the panel stays 0.9 seconds more. This gives the pointer time to reach a panel at its saved place.
 A click on the panel without a move does not change its place. A saved place that is off the screen, for example after a monitor was removed, moves back onto the screen.
 The details to show are chosen in the right-click menu. The choices are conditions, temperature, feels like, 24 hour high and low, 24 hour change, dew point, heat index, wind chill, humidity, wind and gusts, UV index, pressure and trend, visibility, cloud ceiling, rain for 1, 6 and 24 hours, snow for 24 hours, sunrise, sunset, moon phase, moonrise, moonset and observation time. "Show all" and "Reset to defaults" are in the same menu.
 The hover detail "Moon phase" shows the phase name and the lit percentage, by day and by night. It is on by default.
 The hover details "Moonrise" and "Moonset" show the next moonrise and the next moonset. A time on a later day starts with the weekday, for example "Thu 2:58 AM". They are off by default.
 The hover detail "Nearest station" shows the closest official weather station with its code and distance, for example "Fairfield (KFFL), 3.1 mi". It is off by default. The app looks it up once per location and keeps it for 30 days. weather.com blends many sources for the current conditions of the exact location, so the station is shown for reference.
-The right-click menu also has "Check for updates now", "Restart FluentWeather (app and tray icons)", "Close FluentWeather window", "Exit tray icons" and "Exit tray icons and close FluentWeather".
+The right-click menu also has "Check for updates now" (with the build setup only), "Restart FluentWeather (app and tray icons)", "Close FluentWeather window", "Exit tray icons" and "Exit tray icons and close FluentWeather".
 "Close FluentWeather window" closes the window like its X button, so Windows remembers the window size and position. If the app still runs after 4 seconds, the tray program ends it.
 The tray icons start at sign-in. The app window does not open at sign-in unless Setup runs with -StartApp.
 The Start menu has "FluentWeather tray icons" and "Restart FluentWeather".
@@ -135,3 +136,16 @@ The installer holds the setup files only. It holds no certificate, no settings, 
 When it runs, it asks to install now, to extract the files to a Desktop folder first, or to cancel.
 An install extracts the files to a temporary folder, runs Setup, waits for it to finish and deletes the temporary folder.
 Each PC that runs the installer creates its own signing certificate.
+
+
+The direct installer has these features.
+
+"Make FluentWeather direct installer" in the Start menu makes FluentWeather-Setup.exe, FluentWeather-Uninstall.exe and README.txt in a folder FluentWeather-Direct on the Desktop, plus a zip of the three files.
+The setup holds the app as it is built on this PC, the Microsoft packages it needs and the tray icons program. Another Windows 10 or 11 PC installs it in about a minute, with no download and no build.
+Each run creates a throwaway signing certificate, signs a copy of the app with it, puts its public part into the setup and deletes the certificate and its private key. The own signing certificate of the PC is never used, so no other package can ever be signed with the certificate that other PCs trust.
+The setup asks for administrator approval once, to add that certificate to Trusted People. It installs the app for the signed-in user.
+It adds the Start menu folder FluentWeather with FluentWeather, FluentWeather tray icons, Read me and Uninstall FluentWeather. It adds a Startup item for the tray icons and the entry "FluentWeather (Local) with tray icons" in Settings > Apps.
+A newer setup installs over an older one, keeps saved locations and settings and replaces the older certificate.
+The uninstaller removes the app, the tray icons, the Start menu folder, the Startup item, the Settings > Apps entry, the tray settings and the certificate.
+The setup and the uninstaller stop on a PC that has the build setup, so they never change that PC.
+Each PC compiles both programs from FluentWeatherDirect.cs with the C# compiler that ships with Windows.

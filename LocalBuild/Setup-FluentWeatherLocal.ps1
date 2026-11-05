@@ -109,11 +109,19 @@ $FilesToCopy   = @(
     'README.txt',
     'FluentWeatherInstaller.cs',
     'Make-Installer.cmd',
-    'FluentWeather.ico'
+    'FluentWeather.ico',
+    'FluentWeatherDirect.cs',
+    'Make-DirectInstaller.cmd',
+    'Make-DirectInstaller.ps1',
+    'Install-FluentWeather.ps1',
+    'Trust-Certificate.ps1',
+    'Uninstall-FluentWeather.ps1',
+    'Direct-README.txt'
 )
 $UninstallKey  = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\FluentWeatherLocal'
-$SetupVersion  = '36'
+$SetupVersion  = '44'
 $MakeInstallerShortcut = 'Make FluentWeather installer.lnk'
+$MakeDirectShortcut    = 'Make FluentWeather direct installer.lnk'
 
 function Write-Step([string]$Text) { Write-Host "[*] $Text" -ForegroundColor Cyan }
 function Write-Ok([string]$Text)   { Write-Host "[+] $Text" -ForegroundColor Green }
@@ -580,6 +588,14 @@ function Add-MakeInstallerShortcut {
     $lnk.IconLocation = (Join-Path $InstallDir 'FluentWeather.ico') + ',0'
     $lnk.Description = 'Build FluentWeatherLocal-Installer.exe on your Desktop, to share with others'
     $lnk.Save()
+
+    # Makes FluentWeather-Setup.exe from the app built on this PC. Others install it without building.
+    $direct = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath('Programs')) $MakeDirectShortcut))
+    $direct.TargetPath = Join-Path $InstallDir 'Make-DirectInstaller.cmd'
+    $direct.WorkingDirectory = $InstallDir
+    $direct.IconLocation = (Join-Path $InstallDir 'FluentWeather.ico') + ',0'
+    $direct.Description = 'Make FluentWeather-Setup.exe and FluentWeather-Uninstall.exe on your Desktop from the app built on this PC'
+    $direct.Save()
 }
 
 function Invoke-Uninstall {
@@ -595,6 +611,8 @@ function Invoke-Uninstall {
     if (Test-Path $restartLnk) { Remove-Item -LiteralPath $restartLnk -Force }
     $makeLnk = Join-Path ([Environment]::GetFolderPath('Programs')) $MakeInstallerShortcut
     if (Test-Path $makeLnk) { Remove-Item -LiteralPath $makeLnk -Force }
+    $directLnk = Join-Path ([Environment]::GetFolderPath('Programs')) $MakeDirectShortcut
+    if (Test-Path $directLnk) { Remove-Item -LiteralPath $directLnk -Force }
     if (Test-Path $UninstallKey) { Remove-Item -LiteralPath $UninstallKey -Recurse -Force }
     Get-AppxPackage -Name $PackageName -ErrorAction SilentlyContinue | Remove-AppxPackage
     $lnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'FluentWeather (Local).lnk'
