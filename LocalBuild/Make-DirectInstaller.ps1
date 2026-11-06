@@ -12,7 +12,7 @@
       - the newest built app package (.msix) of the installed version and the Microsoft packages it needs,
       - a copy of that package, signed again with a new throwaway certificate (see below),
       - the tray icons program FluentWeatherTray.exe that Setup compiled on this PC,
-      - the install, certificate and uninstall scripts and README for recipients.
+      - Direct-README.txt, the README for recipients.
     It compiles FluentWeatherDirect.cs twice with the C# compiler that ships with Windows and writes
     the result to a new folder "FluentWeather-Direct" on the Desktop, plus a zip of that folder.
 
@@ -259,6 +259,35 @@ try {
     $readme = Join-Path $InstallDir 'Direct-README.txt'
     if (-not (Test-Path -LiteralPath $readme)) { Stop-Make 'Direct-README.txt is missing. Run Setup.cmd again.' }
 
+    # Splits the README at its "VirusTotal" section. The section runs to the next heading, which is a
+    # line followed by a line of dashes. Returns the lines before and after the section.
+    $readmeLines = @(Get-Content -LiteralPath $readme)
+    $vtStart = -1
+    for ($i = 0; $i -lt $readmeLines.Count; $i++) { if ($readmeLines[$i] -match '^VirusTotal') { $vtStart = $i; break } }
+    $vtEnd = $readmeLines.Count
+    if ($vtStart -ge 0) {
+        for ($j = $vtStart + 1; $j -lt $readmeLines.Count - 1; $j++) {
+            if ($readmeLines[$j].Trim() -ne '' -and $readmeLines[$j + 1] -match '^-{3,}\s*$') { $vtEnd = $j; break }
+        }
+    }
+    function Write-Readme([string]$Path, [string[]]$Lines) {
+        [IO.File]::WriteAllText($Path, (($Lines -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
+    }
+
+    # The copy inside the setup cannot hold the links of the setup itself, because the README is part
+    # of the setup and changes its hash. That copy points to the release page instead.
+    $innerReadme = Join-Path $stage 'README.txt'
+    if ($vtStart -ge 0) {
+        $inner = @()
+        if ($vtStart -gt 0) { $inner += $readmeLines[0..($vtStart - 1)] }
+        $inner += @('VirusTotal:', '', 'Each version on the release page lists its VirusTotal results.',
+            'https://github.com/Duedilly108/FluentWeather/releases', '', '', '')
+        if ($vtEnd -lt $readmeLines.Count) { $inner += $readmeLines[$vtEnd..($readmeLines.Count - 1)] }
+        Write-Readme $innerReadme $inner
+    } else {
+        Copy-Item -LiteralPath $readme -Destination $innerReadme
+    }
+
     $outDir = Join-Path (Get-DesktopPath) 'FluentWeather-Direct'
     if (Test-Path -LiteralPath $outDir) { Remove-Item -LiteralPath $outDir -Recurse -Force }
     New-Item -ItemType Directory -Path $outDir | Out-Null
@@ -274,14 +303,28 @@ try {
     $resources.Add([pscustomobject]@{ Path = $tray; Name = 'FluentWeatherTray.exe' })
     $resources.Add([pscustomobject]@{ Path = $uninstallExe; Name = 'FluentWeather-Uninstall.exe' })
     $resources.Add([pscustomobject]@{ Path = $infoPath; Name = 'install-info.json' })
-    $resources.Add([pscustomobject]@{ Path = $readme; Name = 'README.txt' })
+    $resources.Add([pscustomobject]@{ Path = $innerReadme; Name = 'README.txt' })
     $ico = Join-Path $InstallDir 'FluentWeather.ico'
     if (Test-Path -LiteralPath $ico) { $resources.Add([pscustomobject]@{ Path = $ico; Name = 'FluentWeather.ico' }) }
     $trayIcon = Join-Path $WorkDir 'tray-icon.png'
     if (Test-Path -LiteralPath $trayIcon) { $resources.Add([pscustomobject]@{ Path = $trayIcon; Name = 'tray-icon.png' }) }
     Invoke-Compile $setupExe @() $resources
 
-    Copy-Item -LiteralPath $readme -Destination (Join-Path $outDir 'README.txt')
+    # The README next to the files gets the VirusTotal links of the two new files. A link shows a
+    # result after the file is uploaded to virustotal.com once.
+    $outReadme = Join-Path $outDir 'README.txt'
+    if ($vtStart -ge 0) {
+        $setupHash = (Get-FileHash -LiteralPath $setupExe -Algorithm SHA256).Hash.ToLowerInvariant()
+        $uninstallHash = (Get-FileHash -LiteralPath $uninstallExe -Algorithm SHA256).Hash.ToLowerInvariant()
+        $outer = @()
+        if ($vtStart -gt 0) { $outer += $readmeLines[0..($vtStart - 1)] }
+        $outer += @('VirusTotal:', '', 'installer:', "https://www.virustotal.com/gui/file/$setupHash", '',
+            'uninstaller:', "https://www.virustotal.com/gui/file/$uninstallHash", '', '', '')
+        if ($vtEnd -lt $readmeLines.Count) { $outer += $readmeLines[$vtEnd..($readmeLines.Count - 1)] }
+        Write-Readme $outReadme $outer
+    } else {
+        Copy-Item -LiteralPath $readme -Destination $outReadme
+    }
 
     $zip = Join-Path (Get-DesktopPath) "FluentWeather-Direct-$version.zip"
     if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
@@ -291,6 +334,10 @@ try {
     Write-Ok "Done. Folder: $outDir"
     Write-Host "    FluentWeather-Setup.exe ($mb MB), FluentWeather-Uninstall.exe and README.txt"
     Write-Ok "Zip of the same three files, to share: $zip"
+    if ($vtStart -ge 0) {
+        Write-Host '    README.txt has the VirusTotal links of these two files. Upload both files at'
+        Write-Host '    virustotal.com once, so the links show a result.'
+    }
 }
 finally {
     Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
