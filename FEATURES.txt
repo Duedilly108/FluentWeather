@@ -141,6 +141,7 @@ Each PC that runs the installer creates its own signing certificate.
 The direct installer has these features.
 
 "Make FluentWeather direct installer" in the Start menu makes FluentWeather-Setup.exe, FluentWeather-Uninstall.exe and README.txt in a folder FluentWeather-Direct on the Desktop, plus a zip of the three files.
+README.txt in that folder gets the VirusTotal links of the two new files. The copy of README.txt inside the setup points to the release page for the VirusTotal results, because the setup cannot hold its own scan link.
 The setup holds the app as it is built on this PC, the Microsoft packages it needs and the tray icons program. Another Windows 10 or 11 PC installs it in about a minute, with no download and no build.
 Each run creates a throwaway signing certificate, signs a copy of the app with it, puts its public part into the setup and deletes the certificate and its private key. The own signing certificate of the PC is never used, so no other package can ever be signed with the certificate that other PCs trust.
 The setup asks for administrator approval once, to add that certificate to Trusted People. It installs the app for the signed-in user.

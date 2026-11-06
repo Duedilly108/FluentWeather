@@ -13,19 +13,21 @@ Everyone is invited to help with the translation of the app, [help us translate 
 
 ### Requirements
 
-* Windows 10 version 1809 (build 17763) and up
+* Windows 10 version 1809 (build 17763) and up, 64-bit
 
 --------
 
- ***Microsoft Store (recommended)***:
- 
- <a href="https://apps.microsoft.com/store/detail/9PFD136M8457?launch=true&mode=mini" > <img src="https://get.microsoft.com/images/en-us%20dark.svg" width=20% height=20%/> </a>
+***This fork, with saved locations and tray icons***: [FluentWeather-Setup.exe from the latest release](https://github.com/Duedilly108/FluentWeather/releases/latest)
+
+(*Download FluentWeather-Setup.exe and double-click it. Windows asks for administrator approval once.*)
 
 ----
 
-***Standalone package for sideloading***: [latest package from Github Releases](https://github.com/Gabboxl/FluentWeather/releases/latest)
+***The original FluentWeather by Gabboxl***, without the additions of this fork:
 
-(*you have to run the `Install.ps1` script, or trust manually the certificate inside the release package*)
+ <a href="https://apps.microsoft.com/store/detail/9PFD136M8457?launch=true&mode=mini" > <img src="https://get.microsoft.com/images/en-us%20dark.svg" width=20% height=20%/> </a>
+
+[Standalone package from Gabboxl's GitHub Releases](https://github.com/Gabboxl/FluentWeather/releases/latest) (*run the `Install.ps1` script, or trust the certificate inside the release package manually*)
 
 
 
