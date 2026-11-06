@@ -21,7 +21,7 @@ if not defined DESK set "DESK=%USERPROFILE%\Desktop"
 if not exist "%DESK%\" set "DESK=%USERPROFILE%"
 set "OUT=%DESK%\FluentWeatherLocal-Installer.exe"
 
-for %%f in ("Setup-FluentWeatherLocal.ps1" "Update-FluentWeatherLocal.ps1" "FluentWeather-saved-locations.patch" "Setup.cmd" "Update FluentWeather.cmd" "FluentWeatherTray.cs" "FluentWeatherNet.cs" "FluentWeatherInstaller.cs" "Make-Installer.cmd" "FluentWeather.ico" "allowed-hosts.txt" "README.txt" "FluentWeatherDirect.cs" "Make-DirectInstaller.cmd" "Make-DirectInstaller.ps1" "Install-FluentWeather.ps1" "Trust-Certificate.ps1" "Uninstall-FluentWeather.ps1" "Direct-README.txt") do (
+for %%f in ("Setup-FluentWeatherLocal.ps1" "Update-FluentWeatherLocal.ps1" "FluentWeather-saved-locations.patch" "Setup.cmd" "Update FluentWeather.cmd" "FluentWeatherTray.cs" "FluentWeatherNet.cs" "FluentWeatherInstaller.cs" "Make-Installer.cmd" "FluentWeather.ico" "allowed-hosts.txt" "README.txt" "FluentWeatherDirect.cs" "FluentWeatherDirect.manifest" "Make-DirectInstaller.cmd" "Make-DirectInstaller.ps1" "Direct-README.txt") do (
     if not exist "%SRC%%%~f" (
         echo [x] Missing file: "%SRC%%%~f"
         goto :end
@@ -43,11 +43,9 @@ echo Building %OUT%
  /resource:"%SRC%allowed-hosts.txt",payload/allowed-hosts.txt ^
  /resource:"%SRC%README.txt",payload/README.txt ^
  /resource:"%SRC%FluentWeatherDirect.cs",payload/FluentWeatherDirect.cs ^
+ /resource:"%SRC%FluentWeatherDirect.manifest",payload/FluentWeatherDirect.manifest ^
  /resource:"%SRC%Make-DirectInstaller.cmd",payload/Make-DirectInstaller.cmd ^
  /resource:"%SRC%Make-DirectInstaller.ps1",payload/Make-DirectInstaller.ps1 ^
- /resource:"%SRC%Install-FluentWeather.ps1",payload/Install-FluentWeather.ps1 ^
- /resource:"%SRC%Trust-Certificate.ps1",payload/Trust-Certificate.ps1 ^
- /resource:"%SRC%Uninstall-FluentWeather.ps1",payload/Uninstall-FluentWeather.ps1 ^
  /resource:"%SRC%Direct-README.txt",payload/Direct-README.txt ^
  "%SRC%FluentWeatherInstaller.cs"
 if errorlevel 1 (

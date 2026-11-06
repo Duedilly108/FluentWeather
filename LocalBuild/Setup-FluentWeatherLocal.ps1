@@ -111,15 +111,13 @@ $FilesToCopy   = @(
     'Make-Installer.cmd',
     'FluentWeather.ico',
     'FluentWeatherDirect.cs',
+    'FluentWeatherDirect.manifest',
     'Make-DirectInstaller.cmd',
     'Make-DirectInstaller.ps1',
-    'Install-FluentWeather.ps1',
-    'Trust-Certificate.ps1',
-    'Uninstall-FluentWeather.ps1',
     'Direct-README.txt'
 )
 $UninstallKey  = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\FluentWeatherLocal'
-$SetupVersion  = '44'
+$SetupVersion  = '49'
 $MakeInstallerShortcut = 'Make FluentWeather installer.lnk'
 $MakeDirectShortcut    = 'Make FluentWeather direct installer.lnk'
 

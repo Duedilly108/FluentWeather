@@ -42,13 +42,78 @@ function Get-DesktopPath {
     return $desk
 }
 
+# Finds Windows.winmd and the .NET facade assemblies that the WinRT calls (PackageManager) need.
+function Get-WinRTReferences {
+    $refs = @()
+
+    # The Windows Runtime types. Windows keeps their full descriptions in System32\WinMetadata.
+    # The Windows SDK copy is used only if that folder is missing. Its Facade copy holds only
+    # pointers to other files, so it is skipped.
+    $osMeta = Join-Path $env:WINDIR 'System32\WinMetadata'
+    $metaFiles = @()
+    if (Test-Path -LiteralPath $osMeta) {
+        $metaFiles = @(Get-ChildItem -LiteralPath $osMeta -Filter '*.winmd' -File -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.FullName })
+    }
+    if ($metaFiles -notcontains (Join-Path $osMeta 'Windows.Management.winmd')) {
+        $unionRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10\UnionMetadata'
+        $winmd = $null
+        if (Test-Path -LiteralPath $unionRoot) {
+            $winmd = Get-ChildItem -Path $unionRoot -Recurse -Filter 'Windows.winmd' -ErrorAction SilentlyContinue |
+                Where-Object { $_.DirectoryName -notmatch '\\Facade$' } |
+                Sort-Object FullName -Descending | Select-Object -First 1
+        }
+        if (-not $winmd) { Stop-Make 'The Windows Runtime type files were not found in System32\WinMetadata or in the Windows SDK.' }
+        $metaFiles = @($winmd.FullName)
+    }
+    $refs += $metaFiles
+
+    # The facade assemblies let .NET Framework call the Windows Runtime and await its operations.
+    # They are in the .NET Framework targeting pack if it is installed, and always in the .NET
+    # Framework folder and the global assembly cache of Windows. The first match is used.
+    $folders = @()
+    $netRoot = Join-Path ${env:ProgramFiles(x86)} 'Reference Assemblies\Microsoft\Framework\.NETFramework'
+    if (Test-Path -LiteralPath $netRoot) {
+        $folders += @(Get-ChildItem -Path $netRoot -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^v4\.\d' } |
+            Sort-Object { [version]($_.Name.TrimStart('v')) } -Descending |
+            ForEach-Object { Join-Path $_.FullName 'Facades' })
+    }
+    $folders += (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319')
+    $folders += (Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319')
+    $gac = Join-Path $env:WINDIR 'Microsoft.NET\assembly\GAC_MSIL'
+
+    foreach ($f in 'System.Runtime.dll', 'System.Runtime.InteropServices.WindowsRuntime.dll') {
+        $found = $null
+        foreach ($d in $folders) {
+            $p = Join-Path $d $f
+            if (Test-Path -LiteralPath $p) { $found = $p; break }
+        }
+        if (-not $found -and (Test-Path -LiteralPath $gac)) {
+            $name = [IO.Path]::GetFileNameWithoutExtension($f)
+            $found = Get-ChildItem -Path (Join-Path $gac $name) -Recurse -Filter $f -ErrorAction SilentlyContinue |
+                Where-Object { $_.DirectoryName -match '\\v4\.0_' } |
+                Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+        }
+        if (-not $found) { Stop-Make "A .NET Framework file that the build needs was not found: $f" }
+        $refs += $found
+    }
+    return $refs
+}
+
+$winRTRefs = Get-WinRTReferences
+
 # Compiles FluentWeatherDirect.cs. $Resources maps a file path to its embedded name.
 function Invoke-Compile([string]$Out, [string[]]$Defines, $Resources) {
     $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
     if (-not (Test-Path -LiteralPath $csc)) { $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe' }
     if (-not (Test-Path -LiteralPath $csc)) { Stop-Make 'The C# compiler of .NET Framework 4 was not found.' }
 
-    $cscArgs = @('/nologo', '/target:winexe', '/optimize+', "/out:$Out", '/r:System.Windows.Forms.dll')
+    $cscArgs = @('/nologo', '/target:winexe', '/optimize+', "/out:$Out",
+        '/r:System.dll', '/r:System.Drawing.dll', '/r:System.Windows.Forms.dll')
+    foreach ($r in $winRTRefs) { $cscArgs += "/r:$r" }
+    $manifest = Join-Path $InstallDir 'FluentWeatherDirect.manifest'
+    if (Test-Path -LiteralPath $manifest) { $cscArgs += "/win32manifest:$manifest" }
     $ico = Join-Path $InstallDir 'FluentWeather.ico'
     if (Test-Path -LiteralPath $ico) { $cscArgs += "/win32icon:$ico" }
     foreach ($d in $Defines) { $cscArgs += "/define:$d" }
@@ -201,13 +266,9 @@ try {
     $setupExe = Join-Path $outDir 'FluentWeather-Setup.exe'
 
     Write-Step 'Compiling FluentWeather-Uninstall.exe'
-    Invoke-Compile $uninstallExe @('UNINSTALL') @(
-        [pscustomobject]@{ Path = (Join-Path $InstallDir 'Uninstall-FluentWeather.ps1'); Name = 'Uninstall-FluentWeather.ps1' },
-        [pscustomobject]@{ Path = $infoPath; Name = 'install-info.json' })
+    Invoke-Compile $uninstallExe @('UNINSTALL') @()
 
     Write-Step 'Compiling FluentWeather-Setup.exe'
-    $resources.Add([pscustomobject]@{ Path = (Join-Path $InstallDir 'Install-FluentWeather.ps1'); Name = 'Install-FluentWeather.ps1' })
-    $resources.Add([pscustomobject]@{ Path = (Join-Path $InstallDir 'Trust-Certificate.ps1'); Name = 'Trust-Certificate.ps1' })
     $resources.Add([pscustomobject]@{ Path = $cerPath; Name = 'FluentWeatherLocalBuild.cer' })
     $resources.Add([pscustomobject]@{ Path = $stagedMsix; Name = $msix.Name })
     $resources.Add([pscustomobject]@{ Path = $tray; Name = 'FluentWeatherTray.exe' })
