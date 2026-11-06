@@ -144,8 +144,8 @@ The direct installer has these features.
 The setup holds the app as it is built on this PC, the Microsoft packages it needs and the tray icons program. Another Windows 10 or 11 PC installs it in about a minute, with no download and no build.
 Each run creates a throwaway signing certificate, signs a copy of the app with it, puts its public part into the setup and deletes the certificate and its private key. The own signing certificate of the PC is never used, so no other package can ever be signed with the certificate that other PCs trust.
 The setup asks for administrator approval once, to add that certificate to Trusted People. It installs the app for the signed-in user.
-It adds the Start menu folder FluentWeather with FluentWeather, FluentWeather tray icons, Read me and Uninstall FluentWeather. It adds a Startup item for the tray icons and the entry "FluentWeather (Local) with tray icons" in Settings > Apps.
+A setup window offers two options. Both are on by default. "Add a Start menu shortcut" adds the Start menu folder FluentWeather with FluentWeather, FluentWeather tray icons, Read me and Uninstall FluentWeather. "Start the tray icons when Windows starts" adds a Startup item for the tray icons. The setup always adds the entry "FluentWeather (Local) with tray icons" in Settings > Apps.
 A newer setup installs over an older one, keeps saved locations and settings and replaces the older certificate.
-The uninstaller removes the app, the tray icons, the Start menu folder, the Startup item, the Settings > Apps entry, the tray settings and the certificate.
+The uninstaller asks for administrator approval first. If the approval is declined, it removes nothing. It removes the app, the tray icons, the Start menu folder, the Startup item, the Settings > Apps entry, the tray settings and the certificate. Windows deletes the install folder at the next restart.
 The setup and the uninstaller stop on a PC that has the build setup, so they never change that PC.
-Each PC compiles both programs from FluentWeatherDirect.cs with the C# compiler that ships with Windows.
+Each PC compiles both programs from FluentWeatherDirect.cs with the C# compiler that ships with Windows. Both programs do all their work through Windows interfaces. They start no PowerShell and no command prompt.
