@@ -124,7 +124,8 @@ What the other person should know:
     anything else with it, so their PC can only accept this one app package.
     The installed app does not update itself. Send them a new direct installer after
     each update. It installs over the old version and keeps their saved locations.
-    README.txt in the folder explains the install, the firewall and the uninstall.
+    README.txt in the folder explains the install. To remove the app, they use
+    Start menu > FluentWeather > Uninstall FluentWeather, or Settings > Apps.
     The setup and the uninstaller are not signed by a publisher, so SmartScreen
     shows "Windows protected your PC". They select More info, then Run anyway.
     Do not run the direct installer on your own PC. It stops there, because your PC
