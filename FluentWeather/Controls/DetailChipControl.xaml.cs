@@ -50,9 +50,18 @@ namespace FluentWeather.Controls
             currentInstance.ValueText.Text = newValue;
         }
 
+        private readonly Windows.UI.Xaml.Media.Brush _originalBackground;
+
         public DetailChipControl()
         {
             InitializeComponent();
+            _originalBackground = ChipPanel.Background;
+        }
+
+        // Local build: the "Card tint" setting gives the chip a tinted background. Null restores the original.
+        public void SetCardBackground(Windows.UI.Xaml.Media.Brush brush)
+        {
+            ChipPanel.Background = brush ?? _originalBackground;
         }
     }
 }

@@ -27,7 +27,7 @@ FluentWeather opens when the setup is done.
 
 Notes
 -----
-The app only connects to weather.com for the weather data.
+The app connects to weather.com for the weather data. For US locations it also connects to NOAA and USGS for the radar map.
 
 
 VirusTotal:

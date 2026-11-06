@@ -333,6 +333,45 @@ Live Tiles are available natively on Windows 10 only.</value>
   <data name="BackgroundContrastHint.Text" xml:space="preserve">
     <value>Dark and Darker shade the background image and keep light text. Light and Lighter brighten the image and use dark text.</value>
   </data>
+  <data name="CardTintSettingsTitle.Text" xml:space="preserve">
+    <value>Card tint</value>
+  </data>
+  <data name="CardTintSlider.[using:Windows.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
+    <value>Card tint</value>
+  </data>
+  <data name="CardTintHint.Text" xml:space="preserve">
+    <value>Tints the cards so their text stays readable over the background image. 0 percent keeps the original look.</value>
+  </data>
+  <data name="RadarTitleText.Text" xml:space="preserve">
+    <value>Radar</value>
+  </data>
+  <data name="RadarCreditText.Text" xml:space="preserve">
+    <value>Radar and borders NOAA/NWS. Terrain USGS.</value>
+  </data>
+  <data name="RadarUpdatedText" xml:space="preserve">
+    <value>Updated</value>
+  </data>
+  <data name="RadarLoadingText" xml:space="preserve">
+    <value>Loading the radar</value>
+  </data>
+  <data name="RadarNoEchoesText" xml:space="preserve">
+    <value>No rain or snow in this area. Zoom out to see more.</value>
+  </data>
+  <data name="RadarFailedText" xml:space="preserve">
+    <value>The radar could not be loaded. It tries again at the next refresh.</value>
+  </data>
+  <data name="RadarZoomInButton.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
+    <value>Zoom in</value>
+  </data>
+  <data name="RadarZoomInButton.[using:Windows.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
+    <value>Zoom in</value>
+  </data>
+  <data name="RadarZoomOutButton.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
+    <value>Zoom out</value>
+  </data>
+  <data name="RadarZoomOutButton.[using:Windows.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
+    <value>Zoom out</value>
+  </data>
   <data name="LanguageSettingsTitle.Text" xml:space="preserve">
     <value>Language</value>
   </data>

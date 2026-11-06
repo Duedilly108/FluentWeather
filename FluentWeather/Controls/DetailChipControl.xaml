@@ -9,6 +9,7 @@
     d:DesignWidth="400">
 
     <RelativePanel
+        x:Name="ChipPanel"
         Margin="4"
         CornerRadius="6"
         Padding="8"

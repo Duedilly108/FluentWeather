@@ -19,6 +19,10 @@ A tip below the location buttons explains the star button. With no saved locatio
 The setting "Text and picture size" under the gear button sets the size of the weather area from 50 to 100 percent in 5 percent steps, with a minus button, a plus button and a 100 percent button. The default is 100 percent.
 Ctrl+Minus makes the weather area 5 percent smaller. Ctrl+Plus makes it 5 percent larger. Ctrl+0 returns it to 100 percent.
 The setting "Background contrast" makes the text easier to read on the weather background photo. Original shows the photo as it is. Dark and Darker shade the photo and keep light text. Light and Lighter brighten the photo and switch the page to dark text. Dark is the default.
+
+The setting "Card tint" tints the cards over the photo, so their text stays readable on bright or busy photos. A slider sets it from 0 to 100 percent in 5 percent steps. 0 percent keeps the original look. 40 percent is the default. The tint is dark with light text and white with the light background contrasts. The selected day keeps its dark fill.
+
+The "Radar" section at the bottom of the page shows a radar map of the area around the location. It appears only for US locations, including Alaska, Hawaii, Puerto Rico and Guam. The radar and the state and county borders come from NOAA and the National Weather Service. The terrain comes from the USGS National Map. All three are free public US government services and need no key. The + and - buttons zoom from level 4 to level 10, and the app keeps the zoom. The map refreshes with the weather data. It is dark, and light with the light background contrasts. A dot marks the location. The line below the map shows the time of the last update. It also says when there is no rain or snow in the area, and when the radar could not be loaded.
 With Light or Lighter the cards, the titles and the window buttons also turn dark.
 The setting "Hourly forecast" shows the hours of the selected day, or 24, 36 or 48 hours. Day is the default.
 For today the 24, 36 and 48 hour lists start at the current hour. For another day they start at midnight of that day.

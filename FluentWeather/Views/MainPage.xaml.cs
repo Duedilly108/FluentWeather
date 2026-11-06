@@ -32,6 +32,8 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media.Animation;
 using Windows.UI.Xaml.Media.Imaging;
 using WinRT;
+using Media = Windows.UI.Xaml.Media;
+using Shapes = Windows.UI.Xaml.Shapes;
 
 namespace FluentWeather.Views
 {
@@ -102,6 +104,8 @@ namespace FluentWeather.Views
         public string UiScaleText => _uiScalePercent + "%";
 
         public int SettingsBackgroundContrastSelectedIndex => _backgroundContrast;
+
+        public double SettingsCardTint => _cardTint;
 
         public int SettingsHourlyRangeSelectedIndex => Math.Max(0, Array.IndexOf(HourlyRangeSteps, _hourlyRangeHours));
 
@@ -221,9 +225,17 @@ namespace FluentWeather.Views
                     chip.IsChecked = _renderedLocations[args.Index].PlaceId == _activePlaceId;
             };
 
+            // Local build: the day buttons are created lazily too. Give each one the card tint.
+            RepeaterDays.ElementPrepared += (_, args) =>
+            {
+                if (args.Element is Button dayButton)
+                    ApplyCardTintToDayButton(dayButton);
+            };
+
             InitializeSavedLocationShortcuts();
             InitializeUiScale();
             InitializeBackgroundContrast();
+            InitializeRadar();
             InitializeHourlyRange();
             InitializeTitleBarLayout();
             _ = ApplyCompactWindowSizeOnceAsync();
@@ -511,6 +523,7 @@ namespace FluentWeather.Views
                 .FirstOrDefault(s => !string.IsNullOrEmpty(s)) ?? placeId;
             UpdateActiveChip();
             UpdateSaveLocationButton();
+            UpdateRadar(locationV3.latitude, locationV3.longitude, locationV3.countryCode);
 
             MainPhraseText.Text = rootV3Response.v3wxobservationscurrent.cloudCoverPhrase;
 
@@ -751,7 +764,13 @@ namespace FluentWeather.Views
             button.Style = (Style) Resources["SelectedDayButtonStyle"];
 
             // Keep track of the selected button
+            var previous = _lastSelectedDayButton;
             _lastSelectedDayButton = button;
+
+            // Local build: the selected day keeps its own dark fill. The others get the card tint.
+            if (previous != null && previous != button)
+                ApplyCardTintToDayButton(previous);
+            ApplyCardTintToDayButton(button);
         }
 
         private void EmulateDayButtonClick(int index)
@@ -1462,6 +1481,17 @@ namespace FluentWeather.Views
                 _backgroundContrast = DefaultBackgroundContrast;
             }
 
+            try
+            {
+                //run in background to avoid a deadlock/ui freeze
+                var savedTint = Task.Run(async () => await ApplicationData.Current.LocalSettings.ReadAsync<int>(CardTintSettingKey, DefaultCardTint)).Result;
+                _cardTint = savedTint is >= 0 and <= 100 ? savedTint : DefaultCardTint;
+            }
+            catch (Exception)
+            {
+                _cardTint = DefaultCardTint;
+            }
+
             foreach (var key in AcrylicBrushKeys)
             {
                 if (Resources.TryGetValue(key, out var value) && value is Microsoft.UI.Xaml.Media.AcrylicBrush brush)
@@ -1498,6 +1528,12 @@ namespace FluentWeather.Views
                 SetAcrylic("MyAcrylicBrushLine", Colors.Black, 0, 0.1, Color.FromArgb(0x1D, 0x00, 0x00, 0x00));
                 SetAcrylic("MyAcrylicBrushTitleText", Color.FromArgb(0xFF, 0x1B, 0x1B, 0x1B), 0.7, 0.8, Color.FromArgb(0xDD, 0x1B, 0x1B, 0x1B));
             }
+
+            ApplyCardTint(isLight);
+
+            // The radar map has a light and a dark version.
+            if (RadarSection != null && RadarSection.Visibility == Visibility.Visible)
+                _ = BuildRadarAsync();
 
             // The title bar buttons are drawn by Windows. Give them the same text color as the page.
             ThemeSelectorService.TitleBarTheme = isLight ? ElementTheme.Light : null;
@@ -1545,6 +1581,406 @@ namespace FluentWeather.Views
                 // The choice still applies until the app closes.
             }
         }
+
+        // --- Card tint ---
+        // 0 to 100 percent. 0 keeps the original look. Above 0, the cards get a tinted acrylic
+        // background: dark with light text, white with dark text (the light background contrasts).
+        // The cards are the detail chips, the day buttons and the panels that use MyAcrylicBrush.
+        // The selected day keeps its own dark fill.
+
+        private const string CardTintSettingKey = "cardTint";
+        private const int DefaultCardTint = 40;
+        private static readonly Color CardTintDark = Color.FromArgb(0xFF, 0x1C, 0x1C, 0x1E);
+
+        private int _cardTint = DefaultCardTint;
+
+        // The percentage next to the slider. It is inside the settings flyout, so the code gets it when it loads.
+        private TextBlock? _cardTintValueText;
+
+        private void CardTintValueText_OnLoaded(object sender, RoutedEventArgs e)
+        {
+            _cardTintValueText = sender as TextBlock;
+            if (_cardTintValueText != null)
+                _cardTintValueText.Text = _cardTint + "%";
+        }
+
+        private void ApplyCardTint(bool isLight)
+        {
+            var t = _cardTint / 100.0;
+
+            if (_cardTint > 0)
+            {
+                if (isLight)
+                {
+                    var lt = Math.Max(0.3, t);
+                    SetAcrylic("MyAcrylicBrush", Colors.White, lt, lt, Color.FromArgb((byte) Math.Round(lt * 255), 0xFF, 0xFF, 0xFF));
+                }
+                else
+                {
+                    SetAcrylic("MyAcrylicBrush", CardTintDark, t, t, Color.FromArgb((byte) Math.Round(t * 255), CardTintDark.R, CardTintDark.G, CardTintDark.B));
+                }
+            }
+
+            var chipBrush = _cardTint > 0 ? Resources["MyAcrylicBrush"] as Windows.UI.Xaml.Media.Brush : null;
+            foreach (var chip in new[] { WindChipControl, PressureChipControl, HumidityChipControl, VisibilityChipControl, DewPointChipControl, UVIndexChipControl })
+                chip?.SetCardBackground(chipBrush);
+
+            var count = RepeaterDays.ItemsSourceView?.Count ?? 0;
+            for (var i = 0; i < count; i++)
+            {
+                if (RepeaterDays.TryGetElement(i) is Button dayButton)
+                    ApplyCardTintToDayButton(dayButton);
+            }
+
+            if (_cardTintValueText != null)
+                _cardTintValueText.Text = _cardTint + "%";
+        }
+
+        private void ApplyCardTintToDayButton(Button button)
+        {
+            if (_cardTint > 0 && button != _lastSelectedDayButton && Resources["MyAcrylicBrush"] is Windows.UI.Xaml.Media.Brush brush)
+                button.Background = brush;
+            else
+                button.ClearValue(Control.BackgroundProperty);
+        }
+
+        private async void CardTintSlider_OnValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            var value = (int) Math.Round(e.NewValue / 5.0) * 5;
+            if (_cardTintValueText != null)
+                _cardTintValueText.Text = value + "%";
+
+            if (sender is not Slider slider || !slider.IsLoaded || value == _cardTint)
+                return;
+
+            _cardTint = Math.Clamp(value, 0, 100);
+            ApplyBackgroundContrast(BackgroundImageToggleStatus);
+
+            try
+            {
+                await ApplicationData.Current.LocalSettings.SaveAsync(CardTintSettingKey, _cardTint);
+            }
+            catch (Exception)
+            {
+                // The choice still applies until the app closes.
+            }
+        }
+
+        // --- Radar (US locations) ---
+        // A map of the area around the location, drawn from three free public sources:
+        //   USGS National Map shaded relief tiles (terrain),
+        //   NOAA/NWS MRMS base reflectivity (radar), and NOAA/NWS geopolitical borders.
+        // The section is shown only for locations inside a NOAA radar area. The map is built again
+        // when the data refreshes, when the zoom or the panel width changes, and when the
+        // background contrast switches between the light and the dark map.
+
+        private const string RadarZoomSettingKey = "radarZoom";
+        private const int DefaultRadarZoom = 7;
+        private const int MinRadarZoom = 4;
+        private const int MaxRadarZoom = 10;
+        private const double WebMercatorHalf = 20037508.342789244;
+
+        private static readonly HttpClient RadarHttp = ApiUtils.CreateClient("https://opengeo.ncep.noaa.gov/");
+
+        private int _radarZoom = DefaultRadarZoom;
+        private double _radarLat;
+        private double _radarLon;
+        private string? _radarRegion;
+        private double _radarBuiltWidth;
+        private int _radarBuildId;
+        private DispatcherTimer? _radarResizeTimer;
+
+        private void InitializeRadar()
+        {
+            try
+            {
+                //run in background to avoid a deadlock/ui freeze
+                var saved = Task.Run(async () => await ApplicationData.Current.LocalSettings.ReadAsync<int>(RadarZoomSettingKey, DefaultRadarZoom)).Result;
+                _radarZoom = saved is >= MinRadarZoom and <= MaxRadarZoom ? saved : DefaultRadarZoom;
+            }
+            catch (Exception)
+            {
+                _radarZoom = DefaultRadarZoom;
+            }
+
+            _radarResizeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+            _radarResizeTimer.Tick += (_, _) =>
+            {
+                _radarResizeTimer?.Stop();
+                _ = BuildRadarAsync();
+            };
+            UpdateRadarZoomButtons();
+        }
+
+        // The NOAA radar workspace for a location, or null when there is no NOAA radar there.
+        private static string? GetRadarRegion(double lat, double lon, string? countryCode)
+        {
+            var cc = countryCode?.ToUpperInvariant();
+            if (cc is not ("US" or "PR" or "VI" or "GU" or "MP"))
+                return null;
+
+            if (lat is >= 18 and <= 23 && lon is >= -161 and <= -154) return "hawaii";
+            if (lat >= 51 && (lon <= -129 || lon >= 170)) return "alaska";
+            if (lat is >= 17 and <= 19.5 && lon is >= -68 and <= -64) return "carib";
+            if (lat is >= 13 and <= 21 && lon is >= 144 and <= 147) return "guam";
+            if (lat is >= 20 and <= 50 && lon is >= -127 and <= -65) return "conus";
+            return null;
+        }
+
+        private void UpdateRadar(double lat, double lon, string? countryCode)
+        {
+            _radarLat = lat;
+            _radarLon = lon;
+            _radarRegion = GetRadarRegion(lat, lon, countryCode);
+            RadarSection.Visibility = _radarRegion == null ? Visibility.Collapsed : Visibility.Visible;
+
+            if (_radarRegion != null)
+                _ = BuildRadarAsync();
+        }
+
+        private async Task BuildRadarAsync()
+        {
+            var id = ++_radarBuildId;
+            var w = Math.Floor(RadarMapHost.ActualWidth);
+            var h = Math.Floor(RadarMapHost.ActualHeight);
+            if (_radarRegion == null || w < 50 || h < 50)
+                return;
+
+            _radarBuiltWidth = w;
+            var region = _radarRegion;
+            var z = _radarZoom;
+            var isLight = _backgroundContrast >= 3;
+
+            // Web Mercator pixel position of the location at this zoom, then the top left corner of the map.
+            var n = 256.0 * Math.Pow(2, z);
+            var cx = (_radarLon + 180) / 360 * n;
+            var sin = Math.Sin(_radarLat * Math.PI / 180);
+            var cy = (0.5 - Math.Log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * n;
+            var x0 = cx - w / 2;
+            var y0 = cy - h / 2;
+
+            RadarCanvas.Children.Clear();
+            RadarCanvas.Width = w;
+            RadarCanvas.Height = h;
+            RadarCanvas.Clip = new Media.RectangleGeometry { Rect = new Windows.Foundation.Rect(0, 0, w, h) };
+            RadarCanvas.Children.Add(new Shapes.Rectangle
+            {
+                Width = w,
+                Height = h,
+                Fill = new Media.SolidColorBrush(isLight ? Color.FromArgb(0xFF, 0xEE, 0xEE, 0xF0) : Color.FromArgb(0xFF, 0x18, 0x18, 0x1C))
+            });
+
+            // Terrain tiles
+            var tileCount = 1 << z;
+            for (var ty = (int) Math.Floor(y0 / 256); ty <= (int) Math.Floor((y0 + h - 1) / 256); ty++)
+            {
+                if (ty < 0 || ty >= tileCount)
+                    continue;
+
+                for (var tx = (int) Math.Floor(x0 / 256); tx <= (int) Math.Floor((x0 + w - 1) / 256); tx++)
+                {
+                    var wrappedX = ((tx % tileCount) + tileCount) % tileCount;
+                    var tile = new Image
+                    {
+                        Width = 256,
+                        Height = 256,
+                        Stretch = Media.Stretch.Fill,
+                        Opacity = isLight ? 0.9 : 0.28,
+                        Source = new BitmapImage(new Uri("https://basemap.nationalmap.gov/arcgis/rest/services/USGSShadedReliefOnly/MapServer/tile/"
+                                                         + z + "/" + ty + "/" + wrappedX))
+                    };
+                    Canvas.SetLeft(tile, tx * 256 - x0);
+                    Canvas.SetTop(tile, ty * 256 - y0);
+                    RadarCanvas.Children.Add(tile);
+                }
+            }
+
+            // Radar and borders: one picture each for the whole map, at twice the size for sharp lines.
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            var bbox = string.Join(",", new[]
+            {
+                x0 / n * 2 * WebMercatorHalf - WebMercatorHalf,
+                WebMercatorHalf - (y0 + h) / n * 2 * WebMercatorHalf,
+                (x0 + w) / n * 2 * WebMercatorHalf - WebMercatorHalf,
+                WebMercatorHalf - y0 / n * 2 * WebMercatorHalf
+            }.Select(v => v.ToString("0.###", ci)));
+
+            var size = "&WIDTH=" + (int) (w * 2) + "&HEIGHT=" + (int) (h * 2);
+            var common = "SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&STYLES=&CRS=EPSG:3857&BBOX=" + bbox + size + "&FORMAT=image/png&TRANSPARENT=true";
+            var layer = region + "_bref_qcd";
+
+            // A new address each minute, so the image cache never returns an old radar picture.
+            var stamp = DateTime.UtcNow.Ticks / TimeSpan.TicksPerMinute;
+            var radarUrl = "https://opengeo.ncep.noaa.gov/geoserver/" + region + "/" + layer + "/ows?" + common + "&LAYERS=" + layer + "&t=" + stamp;
+            var radarImage = new Image { Width = w, Height = h, Stretch = Media.Stretch.Fill, Opacity = 0.85 };
+            RadarCanvas.Children.Add(radarImage);
+
+            var borders = new Image { Width = w, Height = h, Stretch = Media.Stretch.Fill };
+            RadarCanvas.Children.Add(borders);
+
+            // The location
+            Media.Brush dotBrush;
+            try
+            {
+                dotBrush = new Media.SolidColorBrush((Color) Application.Current.Resources["SystemAccentColorLight2"]);
+            }
+            catch (Exception)
+            {
+                dotBrush = new Media.SolidColorBrush(Colors.DodgerBlue);
+            }
+
+            var dot = new Shapes.Ellipse
+            {
+                Width = 14,
+                Height = 14,
+                Fill = dotBrush,
+                Stroke = new Media.SolidColorBrush(isLight ? Colors.Black : Colors.White),
+                StrokeThickness = 2
+            };
+            Canvas.SetLeft(dot, w / 2 - 7);
+            Canvas.SetTop(dot, h / 2 - 7);
+            RadarCanvas.Children.Add(dot);
+
+            RadarTimeText.Text = "RadarLoadingText".GetLocalized();
+
+            // The radar. The app checks the picture, so it can say when there is no rain or snow on the map.
+            string status;
+            try
+            {
+                using var radarResponse = await ApiUtils.GetWithRetryAsync(RadarHttp, radarUrl);
+                radarResponse.EnsureSuccessStatusCode();
+                var radarPng = await radarResponse.Content.ReadAsByteArrayAsync();
+                var (radarSource, hasEchoes) = await DecodePngAsync(radarPng, false);
+                if (id != _radarBuildId)
+                    return;
+
+                radarImage.Source = radarSource;
+                string time;
+                try
+                {
+                    time = await VariousUtils.GetTimeBasedOnUserSettings(DateTime.Now);
+                }
+                catch (Exception)
+                {
+                    time = DateTime.Now.ToString("t");
+                }
+
+                status = "RadarUpdatedText".GetLocalized() + " " + time;
+                if (!hasEchoes)
+                    status += ". " + "RadarNoEchoesText".GetLocalized();
+            }
+            catch (Exception)
+            {
+                status = "RadarFailedText".GetLocalized();
+            }
+
+            if (id == _radarBuildId)
+                RadarTimeText.Text = status;
+
+            // NOAA draws the borders black. The dark map gets them in a light gray.
+            try
+            {
+                var bordersUrl = "https://opengeo.ncep.noaa.gov/geoserver/ows?" + common + "&LAYERS=geopolitical";
+                using var response = await ApiUtils.GetWithRetryAsync(RadarHttp, bordersUrl);
+                response.EnsureSuccessStatusCode();
+                var png = await response.Content.ReadAsByteArrayAsync();
+                var (source, _) = await DecodePngAsync(png, !isLight);
+                if (id == _radarBuildId)
+                    borders.Source = source;
+            }
+            catch (Exception)
+            {
+                // The map still shows the terrain and the radar.
+            }
+        }
+
+        // Decodes a PNG for an Image. With recolorLight, every visible pixel turns light gray (for the
+        // borders on the dark map). Also returns whether the picture has any visible pixel.
+        private static async Task<(Media.ImageSource Source, bool HasPixels)> DecodePngAsync(byte[] png, bool recolorLight)
+        {
+            using var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+            await stream.WriteAsync(Windows.Security.Cryptography.CryptographicBuffer.CreateFromByteArray(png));
+            stream.Seek(0);
+
+            var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+            var pixelData = await decoder.GetPixelDataAsync(
+                Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied,
+                new Windows.Graphics.Imaging.BitmapTransform(),
+                Windows.Graphics.Imaging.ExifOrientationMode.IgnoreExifOrientation,
+                Windows.Graphics.Imaging.ColorManagementMode.DoNotColorManage);
+            var pixels = pixelData.DetachPixelData();
+
+            // Premultiplied BGRA: each color value is the color times the alpha.
+            var hasPixels = false;
+            for (var i = 0; i < pixels.Length; i += 4)
+            {
+                var a = pixels[i + 3];
+                if (a == 0)
+                    continue;
+
+                hasPixels = true;
+                if (!recolorLight)
+                    break;
+
+                pixels[i] = (byte) (0xD2 * a / 255);
+                pixels[i + 1] = (byte) (0xC8 * a / 255);
+                pixels[i + 2] = (byte) (0xC8 * a / 255);
+            }
+
+            var bitmap = Windows.Graphics.Imaging.SoftwareBitmap.CreateCopyFromBuffer(
+                Windows.Security.Cryptography.CryptographicBuffer.CreateFromByteArray(pixels),
+                Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                (int) decoder.PixelWidth,
+                (int) decoder.PixelHeight,
+                Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+
+            var source = new SoftwareBitmapSource();
+            await source.SetBitmapAsync(bitmap);
+            return (source, hasPixels);
+        }
+
+        private void RadarMapHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_radarRegion == null || _radarResizeTimer == null)
+                return;
+
+            if (Math.Abs(Math.Floor(e.NewSize.Width) - _radarBuiltWidth) < 24)
+                return;
+
+            _radarResizeTimer.Stop();
+            _radarResizeTimer.Start();
+        }
+
+        private async void ChangeRadarZoom(int delta)
+        {
+            var zoom = Math.Clamp(_radarZoom + delta, MinRadarZoom, MaxRadarZoom);
+            if (zoom == _radarZoom)
+                return;
+
+            _radarZoom = zoom;
+            UpdateRadarZoomButtons();
+            _ = BuildRadarAsync();
+
+            try
+            {
+                await ApplicationData.Current.LocalSettings.SaveAsync(RadarZoomSettingKey, _radarZoom);
+            }
+            catch (Exception)
+            {
+                // The zoom still applies until the app closes.
+            }
+        }
+
+        private void UpdateRadarZoomButtons()
+        {
+            RadarZoomInButton.IsEnabled = _radarZoom < MaxRadarZoom;
+            RadarZoomOutButton.IsEnabled = _radarZoom > MinRadarZoom;
+        }
+
+        private void RadarZoomInButton_OnClick(object sender, RoutedEventArgs e) => ChangeRadarZoom(1);
+
+        private void RadarZoomOutButton_OnClick(object sender, RoutedEventArgs e) => ChangeRadarZoom(-1);
 
         // --- Text and picture size ---
         // The main area is laid out at (window size / scale) and then drawn smaller with a ScaleTransform.
